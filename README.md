@@ -91,16 +91,36 @@ lib/
 flutter pub get
 ```
 
-### 3. 配置API密钥
+### 3. 配置API密钥 ⚠️ **必须**
 
-创建 `lib/config/api_keys.dart`：
+**首次运行必须配置！**
+
+```bash
+# 复制模板文件
+cp lib/config/api_keys.dart.template lib/config/api_keys.dart
+```
+
+编辑 `lib/config/api_keys.dart`，填入你的真实配置：
 
 ```dart
 class ApiKeys {
-  static const String gptApiKey = 'your-api-key-here';
-  static const String gptBaseUrl = 'https://api.example.com/v1';
+  // 从你的API服务商获取
+  static const String gptApiKey = 'sk-your-real-api-key-here';
+  
+  // 根据服务商填写，例如：
+  // OneChats: https://api.gptsapi.net/v1
+  // OpenAI: https://api.openai.com/v1
+  static const String gptBaseUrl = 'https://api.gptsapi.net/v1';
+  
+  // 模型名称，例如：gpt-5-nano, gpt-4
+  static const String gptModel = 'gpt-5-nano';
 }
 ```
+
+⚠️ **安全提示**：
+- `api_keys.dart` 已在 `.gitignore` 中，不会被提交到Git
+- 请勿将此文件分享给他人
+- 定期更换API密钥
 
 ### 4. 运行应用
 
