@@ -1,0 +1,23 @@
+/// API配置类
+/// 
+/// ⚠️ 使用说明：
+/// 1. 复制此文件为 api_keys.dart
+/// 2. 填入你的实际API密钥和配置
+/// 3. api_keys.dart 已在 .gitignore 中，不会被提交到Git
+/// 
+/// 📝 示例配置：
+/// - OneChats: baseUrl = 'https://api.gptsapi.net/v1', model = 'gpt-5-nano'
+/// - OpenAI: baseUrl = 'https://api.openai.com/v1', model = 'gpt-4'
+class ApiKeys {
+  /// GPT API密钥
+  /// 从你的API服务商处获取
+  static const String gptApiKey = 'your-api-key-here';
+  
+  /// GPT API基础URL
+  /// 根据服务商填写对应的API地址
+  static const String gptBaseUrl = 'https://api.example.com/v1';
+  
+  /// GPT模型名称
+  /// 填写服务商支持的模型名称
+  static const String gptModel = 'gpt-4';
+}
