@@ -87,21 +87,21 @@ VS_VERSION_INFO VERSIONINFO
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
-        BLOCK "040904e4"
+        BLOCK "080404b0"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "self_discipline_assistant" "\0"
+            VALUE "FileDescription", "自律助手" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "self_discipline_assistant" "\0"
+            VALUE "InternalName", "自律助手" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2025 com.example. All rights reserved." "\0"
             VALUE "OriginalFilename", "self_discipline_assistant.exe" "\0"
-            VALUE "ProductName", "self_discipline_assistant" "\0"
+            VALUE "ProductName", "自律助手" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
     BLOCK "VarFileInfo"
     BEGIN
-        VALUE "Translation", 0x409, 1252
+        VALUE "Translation", 0x804, 1200
     END
 END
 

@@ -12,7 +12,7 @@ set(WRAPPER_ROOT "${EPHEMERAL_DIR}/cpp_client_wrapper")
 
 # Set fallback configurations for older versions of the flutter tool.
 if (NOT DEFINED FLUTTER_TARGET_PLATFORM)
-  set(FLUTTER_TARGET_PLATFORM "windows-x64")
+  set(FLUTTER_TARGET_PLATFORM "windows-arm64")
 endif()
 
 # === Flutter Library ===
@@ -69,6 +69,9 @@ target_link_libraries(flutter_wrapper_plugin PUBLIC flutter)
 target_include_directories(flutter_wrapper_plugin PUBLIC
   "${WRAPPER_ROOT}/include"
 )
+if(MSVC)
+  target_compile_options(flutter_wrapper_plugin PRIVATE /FS)
+endif()
 add_dependencies(flutter_wrapper_plugin flutter_assemble)
 
 # Wrapper sources needed for the runner.

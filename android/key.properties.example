@@ -1,0 +1,9 @@
+# 复制为 android/key.properties 并填写你的实际值
+# keystore 绝对路径或相对路径（相对 android/ 目录）
+storeFile=app/my-release-key.jks
+# keystore 密码
+storePassword=CHANGEME
+# key 别名
+keyAlias=my_key_alias
+# key 密码
+keyPassword=CHANGEME

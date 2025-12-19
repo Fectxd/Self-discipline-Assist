@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 主图标设计：时钟与任务完成的组合，代表自律和时间管理 -->
+    <group
+        android:scaleX="1.2"
+        android:scaleY="1.2"
+        android:translateX="54"
+        android:translateY="54">
+
+        <!-- 外圈白色圆环 -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M0,0m-26,0a26,26 0,1,1 52,0a26,26 0,1,1 -52,0"/>
+
+        <!-- 内圈蓝色底 -->
+        <path
+            android:fillColor="#1976D2"
+            android:pathData="M0,0m-22,0a22,22 0,1,1 44,0a22,22 0,1,1 -44,0"/>
+
+        <!-- 时钟外圈白色 -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M0,0m-20,0a20,20 0,1,1 40,0a20,20 0,1,1 -40,0"/>
+
+        <!-- 时钟刻度 - 12个刻度 -->
+        <path
+            android:fillColor="#1976D2"
+            android:pathData="M0,-16 L0,-14 M8,-13.8 L7,-12.1 M13.8,-8 L12.1,-7 M16,0 L14,0 M13.8,8 L12.1,7 M8,13.8 L7,12.1 M0,16 L0,14 M-8,13.8 L-7,12.1 M-13.8,8 L-12.1,7 M-16,0 L-14,0 M-13.8,-8 L-12.1,-7 M-8,-13.8 L-7,-12.1"/>
+
+        <!-- 时钟指针 - 短针指向10点，长针指向2点（10:10，象征完美时刻） -->
+        <path
+            android:fillColor="#1976D2"
+            android:pathData="M0,0 L-5,10 L-3.5,10.5 L0,1 L3.5,10.5 L5,10 Z"/>
+        <path
+            android:fillColor="#1976D2"
+            android:pathData="M0,0 L8,-5 L8.5,-3 L1.2,0 L8.5,3 L8,-5 Z"/>
+
+        <!-- 中心装饰点 -->
+        <path
+            android:fillColor="#FFC107"
+            android:pathData="M0,0m-2,0a2,2 0,1,1 4,0a2,2 0,1,1 -4,0"/>
+
+        <!-- AI智能星标 - 右上角 -->
+        <path
+            android:fillColor="#FFC107"
+            android:pathData="M15,-15 l1.5,4.5 l4.5,1.5 l-4.5,1.5 l-1.5,4.5 l-1.5,-4.5 l-4.5,-1.5 l4.5,-1.5 z"/>
+
+        <!-- 勾选标记 - 右下角圆形底 -->
+        <path
+            android:fillColor="#4CAF50"
+            android:pathData="M14,14m-7,0a7,7 0,1,1 14,0a7,7 0,1,1 -14,0"/>
+
+        <!-- 勾选标记 - 白色勾 -->
+        <path
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="2"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:pathData="M10,14 l2,2 l4,-4"/>
+    </group>
+</vector>

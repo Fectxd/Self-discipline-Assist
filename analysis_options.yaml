@@ -26,3 +26,9 @@ linter:
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options
+
+# Exclude example/demo files from static analysis to avoid errors
+# for standalone example scripts that reference types not included
+analyzer:
+  exclude:
+    - lib/examples/**

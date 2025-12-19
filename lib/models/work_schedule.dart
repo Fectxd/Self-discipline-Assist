@@ -43,6 +43,20 @@ enum BiweeklyType {
   }
 }
 
+/// 一周的起始日配置（用于日历显示）
+enum WeekStart {
+  sunday('sunday', '周日'),
+  monday('monday', '周一');
+
+  final String value;
+  final String label;
+  const WeekStart(this.value, this.label);
+
+  static WeekStart fromString(String value) {
+    return WeekStart.values.firstWhere((w) => w.value == value, orElse: () => WeekStart.monday);
+  }
+}
+
 /// 工作制配置模型
 class WorkScheduleConfig {
   final WorkScheduleType type;
@@ -50,10 +64,22 @@ class WorkScheduleConfig {
   /// 大小周的周配置 Map<周起始日期, 是否为大周>
   final Map<String, BiweeklyType> biweeklySettings;
 
+  final WeekStart weekStart;
+  /// 用户为单休/双休自定义的休息日配置
+  /// key: WorkScheduleType.value -> list of weekdays (1=Mon..7=Sun)
+  final Map<String, List<int>> restDaysMapping;
+
   WorkScheduleConfig({
     required this.type,
     Map<String, BiweeklyType>? biweeklySettings,
-  }) : biweeklySettings = biweeklySettings ?? {};
+    WeekStart? weekStart,
+    Map<String, List<int>>? restDaysMapping,
+  })  : biweeklySettings = biweeklySettings ?? {},
+        weekStart = weekStart ?? WeekStart.monday,
+        restDaysMapping = restDaysMapping ?? {
+          WorkScheduleType.singleRest.value: [7],
+          WorkScheduleType.doubleRest.value: [6, 7],
+        };
 
   Map<String, dynamic> toMap() {
     return {
@@ -61,6 +87,8 @@ class WorkScheduleConfig {
       'biweekly_settings': biweeklySettings.map(
         (key, value) => MapEntry(key, value.value),
       ),
+      'week_start': weekStart.value,
+      'rest_days': restDaysMapping,
     };
   }
 
@@ -72,16 +100,22 @@ class WorkScheduleConfig {
       biweeklySettings: biweeklyMap?.map(
         (key, value) => MapEntry(key, BiweeklyType.fromString(value as String)),
       ) ?? {},
+      weekStart: map['week_start'] != null ? WeekStart.fromString(map['week_start'] as String) : null,
+      restDaysMapping: (map['rest_days'] as Map<String, dynamic>?)?.map((k, v) => MapEntry(k, (v as List).map((e) => e as int).toList())),
     );
   }
 
   WorkScheduleConfig copyWith({
     WorkScheduleType? type,
     Map<String, BiweeklyType>? biweeklySettings,
+    WeekStart? weekStart,
+    Map<String, List<int>>? restDaysMapping,
   }) {
     return WorkScheduleConfig(
       type: type ?? this.type,
       biweeklySettings: biweeklySettings ?? this.biweeklySettings,
+      weekStart: weekStart ?? this.weekStart,
+      restDaysMapping: restDaysMapping ?? this.restDaysMapping,
     );
   }
 }

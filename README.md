@@ -93,34 +93,37 @@ flutter pub get
 
 ### 3. 配置API密钥 ⚠️ **必须**
 
-**首次运行必须配置！**
+本应用支持两种配置方式：
+
+#### 方式一：应用内配置（推荐）✨
+
+1. 首次运行应用
+2. 在"AI日程"页面点击右上角的 ⚠️ 图标
+3. 进入设置页面，填写以下信息：
+   - **API密钥**：从服务商获取（如 `sk-xxxxx`）
+   - **API地址**：服务商的API地址
+     - OpenAI 官方：`https://api.openai.com/v1`
+     - GPTSApi：`https://api.gptsapi.net/v1`
+   - **模型名称**：如 `gpt-3.5-turbo`、`gpt-5-nano` 等
+4. 点击"预设配置"可快速应用常用服务商设置
+5. 点击"保存配置"
+
+配置后右上角图标会变为 ✅ 绿色。
+
+#### 方式二：代码配置（高级用户）
 
 ```bash
 # 复制模板文件
 cp lib/config/api_keys.dart.template lib/config/api_keys.dart
 ```
 
-编辑 `lib/config/api_keys.dart`，填入你的真实配置：
-
-```dart
-class ApiKeys {
-  // 从你的API服务商获取
-  static const String gptApiKey = 'sk-your-real-api-key-here';
-  
-  // 根据服务商填写，例如：
-  // OneChats: https://api.gptsapi.net/v1
-  // OpenAI: https://api.openai.com/v1
-  static const String gptBaseUrl = 'https://api.gptsapi.net/v1';
-  
-  // 模型名称，例如：gpt-5-nano, gpt-4
-  static const String gptModel = 'gpt-5-nano';
-}
-```
+编辑 `lib/config/api_keys.dart`，填入你的真实配置。
 
 ⚠️ **安全提示**：
+- API密钥安全存储在本地，不会上传到服务器
 - `api_keys.dart` 已在 `.gitignore` 中，不会被提交到Git
-- 请勿将此文件分享给他人
-- 定期更换API密钥
+- 请勿将密钥分享给他人
+- 定期更换API密钥以确保安全
 
 ### 4. 运行应用
 

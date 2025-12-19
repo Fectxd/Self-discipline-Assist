@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="180" fill="#1A7EDB"/>
+
+  <!-- White dial -->
+  <circle cx="512" cy="512" r="300" fill="white"/>
+
+  <!-- Inner thin blue ring -->
+  <circle cx="512" cy="512" r="260" fill="none" stroke="#1A7EDB" stroke-width="16" opacity="0.25"/>
+
+  <!-- Sun center -->
+  <circle cx="512" cy="512" r="30" fill="#FFC93C"/>
+
+  <!-- Three triangular sunlight-clock hands -->
+  <!-- Large pointer (right-up) -->
+  <polygon 
+    points="512,512 660,382 620,372"
+    fill="#FFC93C"
+  />
+
+  <!-- Medium pointer (right) -->
+  <polygon 
+    points="512,512 640,502 640,522"
+    fill="#FFC93C"
+  />
+
+  <!-- Small pointer (left-down) -->
+  <polygon 
+    points="512,512 440,612 455,622"
+    fill="#FFC93C"
+  />
+
+  <!-- Bigger fat crescent moon (top-right area) - mirrored and thicker -->
+  <g transform="translate(780,180)">
+    <circle cx="0" cy="0" r="75" fill="#FFD138"/>
+    <circle cx="-25" cy="0" r="75" fill="#1A7EDB"/>
+  </g>
+
+  <!-- Main star (top-left area) -->
+  <g transform="translate(240,200) scale(1.2)">
+    <path d="M0 -26 L8 -6 L28 -2 L12 6 L18 26 L0 14 L-18 26 -12 6 -28 -2 -8 -6 Z"
+          fill="#FFD138"/>
+  </g>
+
+  <!-- Additional small scattered stars -->
+  <!-- bottom left -->
+  <g transform="translate(200,800) scale(0.8)">
+    <path d="M0 -16 L4 -4 L16 0 L4 4 L0 16 L-4 4 L-16 0 L-4 -4 Z"
+          fill="#FFECA0"/>
+  </g>
+
+  <!-- bottom center-left -->
+  <g transform="translate(380,850) scale(0.7)">
+    <path d="M0 -14 L3 -3 L14 0 L3 3 L0 14 L-3 3 L-14 0 L-3 -3 Z"
+          fill="#FFECA0"/>
+  </g>
+
+  <!-- bottom right -->
+  <g transform="translate(780,820) scale(0.6)">
+    <path d="M0 -12 L3 -3 L12 0 L3 3 L0 12 L-3 3 L-12 0 L-3 -3 Z"
+          fill="#FFECA0"/>
+  </g>
+
+  <!-- top center small -->
+  <g transform="translate(512,120) scale(0.5)">
+    <path d="M0 -10 L2 -2 L10 0 L2 2 L0 10 L-2 2 L-10 0 L-2 -2 Z"
+          fill="#FFECA0"/>
+  </g>
+
+  <!-- Check badge -->
+  <g transform="translate(760,700)">
+    <circle cx="0" cy="0" r="110" fill="#32C26A"/>
+    <path d="M -42 0 L -6 36 L 52 -28"
+          stroke="#FFFFFF" stroke-width="32" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+
+</svg>

@@ -1,48 +1,93 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'dart:convert';
+import 'dart:async';
+import 'package:pull_to_refresh/pull_to_refresh.dart';
 import '../models/schedule.dart';
-import '../models/schedule_priority.dart';
+import '../models/chat_message.dart';
+import '../widgets/schedule_header.dart';
+import '../widgets/chat_panel.dart';
+import '../widgets/chat_input_bar.dart';
+import '../widgets/schedule_delete_dialog.dart';
+import '../widgets/override_list_dialog.dart';
+import '../widgets/rule_edit_dialog.dart';
+import '../widgets/approval_card_list.dart';
+import '../widgets/schedule_item.dart';
+import '../widgets/switch_refresh_indicator.dart';
+import '../widgets/custom_pull_footer.dart';
 import '../models/schedule_rule.dart';
+import '../models/schedule_override.dart';
 import '../services/database_service.dart';
 import '../services/day_service.dart';
-import '../services/gpt_service.dart';
-import '../services/import_export_service.dart';
+import '../services/work_schedule_service.dart';
+import '../services/holiday_service.dart';
+import '../services/ai_service.dart';
+import '../config/api_keys.dart';
 import '../models/day_type.dart';
 import '../models/holiday.dart';
+import '../models/pending_action.dart';
+import '../utils/snackbar_helper.dart';
+import 'settings_screen.dart';
+
+// 聊天/日程面板三档状态
+enum PanelSizeState { expanded, normal, minimized }
 
 /// AI 日程页面（集成聊天助手）
 class ScheduleScreen extends StatefulWidget {
   final DateTime? initialDate;
-  final GptService gptService;
-  
-  const ScheduleScreen({
-    super.key,
-    this.initialDate,
-    required this.gptService,
-  });
+  final AIService aiService;
+
+  const ScheduleScreen({super.key, this.initialDate, required this.aiService});
 
   @override
   State<ScheduleScreen> createState() => ScheduleScreenState();
 }
 
 class ScheduleScreenState extends State<ScheduleScreen> {
-
   DateTime _selectedDate = DateTime.now();
   List<Schedule> _schedules = [];
+  List<Schedule> _prevSchedules = []; // 前一天的日程（向上滚动预览）
+  List<Schedule> _nextSchedules = []; // 次日前4个 + 更多（向下滚动时加载）
   Map<String, ScheduleRule> _rulesCache = {};
+  List<ScheduleOverride> _overridesCache = []; // 当天的覆盖记录
   DayType? _dayType;
   Holiday? _holiday;
-  
-  late GptService _gptService;
+
+  late AIService _aiService;
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scheduleScrollController = ScrollController();
+  final ScrollController _messageScrollController = ScrollController();
+  final List<GlobalKey> _scheduleItemKeys = <GlobalKey>[];
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
 
+  // 下拉刷新控制器
+  final RefreshController _refreshController = RefreshController(
+    initialRefresh: false,
+  );
+
+  // 日期切换方向：-1表示前一天，1表示后一天，0表示无切换
+  int _dateChangeDirection = 0;
+
   static const String _keyMessages = 'chat_messages';
+
+  // 三档面板状态与拖动控制
+  PanelSizeState _panelState = PanelSizeState.normal;
+  double _chatFraction = 0.40;
+  bool _isDragging = false;
+
+  // Dismissible key 计数器，每次清除聊天记录时递增，确保 widget 完全重建
+  int _dismissibleKeyCounter = 0;
+
+  // 标记是否应该滚动到当前任务（仅在从外部导航进入时为true）
+  bool _shouldScrollToCurrent = false;
+  
+  // 记录上次审批数量，用于判断审批窗是否首次弹出
+  int _lastPendingActionsCount = 0;
 
   @override
   void initState() {
@@ -50,8 +95,12 @@ class ScheduleScreenState extends State<ScheduleScreen> {
     if (widget.initialDate != null) {
       _selectedDate = widget.initialDate!;
     }
-    // 使用从 MainScreen 传入的 GptService
-    _gptService = widget.gptService;
+    // 使用从 MainScreen 传入的 AIService
+    _aiService = widget.aiService;
+
+    // 页面初始化时需要滚动到当前任务
+    _shouldScrollToCurrent = true;
+
     _loadSchedules();
     _loadMessages();
   }
@@ -59,7 +108,7 @@ class ScheduleScreenState extends State<ScheduleScreen> {
   Future<void> _loadMessages() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonStr = prefs.getString(_keyMessages);
-    
+
     if (jsonStr != null) {
       try {
         final List<dynamic> jsonList = jsonDecode(jsonStr);
@@ -67,6 +116,7 @@ class ScheduleScreenState extends State<ScheduleScreen> {
           _messages.clear();
           _messages.addAll(jsonList.map((json) => ChatMessage.fromJson(json)));
         });
+        _scrollMessagesToBottom();
       } catch (e) {
         // 解析失败，添加欢迎消息
         _addWelcomeMessage();
@@ -77,13 +127,14 @@ class ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   void _addWelcomeMessage() {
-    setState(() {
-      _messages.add(ChatMessage(
-        text: '嗨！我是你的智能助手 🤖\n\n你可以随便跟我聊天，比如：\n• "还没睡呢"\n• "明天干什么"\n• "帮我安排工作日晨练"\n\n我会根据你的日程给出建议~',
+    _addChatMessage(
+      ChatMessage(
+        text:
+            '嗨！我是你的智能助手 🤖\n\n你可以随便跟我聊天，比如：\n• "还没睡呢"\n• "明天干什么"\n• "帮我安排工作日晨练"\n\n我会根据你的日程给出建议~',
         isUser: false,
         timestamp: DateTime.now(),
-      ));
-    });
+      ),
+    );
   }
 
   Future<void> _saveMessages() async {
@@ -93,10 +144,22 @@ class ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   /// 外部更新选中日期
-  void updateSelectedDate(DateTime date) {
+  void updateSelectedDate(DateTime date) async {
+    final oldYear = _selectedDate.year;
     setState(() {
       _selectedDate = date;
+      _shouldScrollToCurrent = true; // 从外部导航进入，需要滚动
     });
+
+    // 如果切换到了新的年份，确保该年份的节假日已缓存
+    if (date.year != oldYear) {
+      final holidayService = Provider.of<HolidayService>(
+        context,
+        listen: false,
+      );
+      await holidayService.ensureYearCached(date.year);
+    }
+
     _loadSchedules();
   }
 
@@ -104,17 +167,214 @@ class ScheduleScreenState extends State<ScheduleScreen> {
   void dispose() {
     _textController.dispose();
     _scheduleScrollController.dispose();
+    _messageScrollController.dispose();
     super.dispose();
+  }
+
+  /// 将消息加入并保存，同时滚动到底部
+  void _addChatMessage(ChatMessage msg) {
+    setState(() {
+      _messages.add(msg);
+      // 当有新消息时，将聊天窗口最大化
+      if (_panelState != PanelSizeState.expanded) {
+        _setPanelState(PanelSizeState.expanded);
+      }
+    });
+    _saveMessages();
+    _scrollMessagesToBottom();
+  }
+
+  void _scrollMessagesToBottom() {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (_messageScrollController.hasClients) {
+        _messageScrollController.animateTo(
+          _messageScrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  // --- 运行时 API 配置存储键 ---
+  static const String _keyRuntimeApiKey = 'runtime_gpt_api_key';
+  static const String _keyRuntimeBaseUrl = 'runtime_gpt_base_url';
+  static const String _keyRuntimeModel = 'runtime_gpt_model';
+
+  // (配置读取由对话打开时直接从 SharedPreferences 获取，无需单独公开方法)
+
+  Future<void> _saveRuntimeApiConfig({
+    String? apiKey,
+    String? baseUrl,
+    String? model,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (apiKey == null) {
+      await prefs.remove(_keyRuntimeApiKey);
+    } else {
+      await prefs.setString(_keyRuntimeApiKey, apiKey);
+    }
+    if (baseUrl == null) {
+      await prefs.remove(_keyRuntimeBaseUrl);
+    } else {
+      await prefs.setString(_keyRuntimeBaseUrl, baseUrl);
+    }
+    if (model == null) {
+      await prefs.remove(_keyRuntimeModel);
+    } else {
+      await prefs.setString(_keyRuntimeModel, model);
+    }
+  }
+
+  bool _apiConfigHighlight = false;
+
+  Future<void> _openApiConfigDialog({bool highlight = false}) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    final currentKey = prefs.getString(_keyRuntimeApiKey) ?? '';
+    final currentBase =
+        prefs.getString(_keyRuntimeBaseUrl) ?? ApiKeys.gptBaseUrl;
+    final currentModel = prefs.getString(_keyRuntimeModel) ?? ApiKeys.gptModel;
+
+    final keyCtrl = TextEditingController(text: currentKey);
+    final baseCtrl = TextEditingController(text: currentBase);
+    final modelCtrl = TextEditingController(text: currentModel);
+
+    if (highlight) {
+      setState(() {
+        _apiConfigHighlight = true;
+      });
+    }
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('API 配置'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: _apiConfigHighlight
+                          ? Colors.orange
+                          : Colors.transparent,
+                      width: 2,
+                    ),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  padding: const EdgeInsets.all(6),
+                  child: TextField(
+                    controller: keyCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'API Key',
+                      hintText: '在此粘贴你的 API Key（可留空使用内置）',
+                    ),
+                    obscureText: true,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: baseCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Base URL',
+                    hintText: '例如: https://api.openai.com/v1',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: modelCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Model',
+                    hintText: '例如: gpt-4o-mini',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () {
+                          // 清除运行时配置，回退到内置值
+                          keyCtrl.clear();
+                          baseCtrl.text = ApiKeys.gptBaseUrl;
+                          modelCtrl.text = ApiKeys.gptModel;
+                          _saveRuntimeApiConfig(
+                            apiKey: null,
+                            baseUrl: null,
+                            model: null,
+                          );
+                          Navigator.pop(dialogContext);
+                        },
+                        child: const Text('恢复默认'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: () async {
+                        await _saveRuntimeApiConfig(
+                          apiKey: keyCtrl.text.trim().isEmpty
+                              ? null
+                              : keyCtrl.text.trim(),
+                          baseUrl: baseCtrl.text.trim().isEmpty
+                              ? null
+                              : baseCtrl.text.trim(),
+                          model: modelCtrl.text.trim().isEmpty
+                              ? null
+                              : modelCtrl.text.trim(),
+                        );
+                        if (!mounted || !dialogContext.mounted) return;
+                        SnackBarHelper.showMessage(context, 'API 配置已保存');
+                        Navigator.pop(dialogContext);
+                      },
+                      child: const Text('保存'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    // 取消高亮（短暂展示）
+    if (highlight) {
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) setState(() => _apiConfigHighlight = false);
+      });
+    }
   }
 
   Future<void> _loadSchedules() async {
     final dbService = Provider.of<DatabaseService>(context, listen: false);
     final dayService = Provider.of<DayService>(context, listen: false);
-    
+
+    // 加载当天全部日程
     final schedules = await dbService.getSchedulesByDate(_selectedDate);
+
+    // 加载次日全部日程（前4个作为边界，5+用于overscroll显示）
+    final nextDay = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+    ).add(const Duration(days: 1));
+    final nextSchedules = await dbService.getSchedulesByDate(nextDay);
+
+    // 加载前一天的全部日程（用于向上超出边界时显示）
+    final prevDay = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+    ).subtract(const Duration(days: 1));
+    final prevSchedules = await dbService.getSchedulesByDate(prevDay);
+
     final dayType = await dayService.getDayType(_selectedDate);
     final holiday = await dayService.getHoliday(_selectedDate);
-    
+
     // 加载所有规则到缓存
     final db = await dbService.database;
     final ruleMaps = await db.query('schedule_rules');
@@ -123,30 +383,176 @@ class ScheduleScreenState extends State<ScheduleScreen> {
       final rule = ScheduleRule.fromMap(map);
       rulesCache[rule.id] = rule;
     }
-    
+
+    // 加载当天的覆盖记录（直接查询当天的，更高效）
+    final todayOverrides = await dbService.getOverridesByDate(_selectedDate);
+
     setState(() {
       _schedules = schedules;
+      _prevSchedules = prevSchedules;
+      _nextSchedules = nextSchedules;
       _dayType = dayType;
       _holiday = holiday;
       _rulesCache = rulesCache;
+      _overridesCache = todayOverrides;
+
+      // 更新 item keys
+      _scheduleItemKeys.clear();
+      _scheduleItemKeys.addAll(
+        List.generate(_schedules.length, (_) => GlobalKey()),
+      );
+    });
+
+    // 滚动到合适的位置
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scheduleScrollController.hasClients) return;
+
+      // 检查是否有当前日程需要滚动到
+      final (currentIndex, isPrev) = _getCurrentScheduleInfo();
+      final hasCurrentSchedule =
+          currentIndex != null &&
+          !isPrev &&
+          currentIndex < _scheduleItemKeys.length;
+
+      // 如果是日期切换触发的加载
+      if (_dateChangeDirection != 0) {
+        final direction = _dateChangeDirection;
+        _dateChangeDirection = 0; // 重置方向标记
+
+        if (_schedules.isEmpty) {
+          return; // 如果没有日程，不执行动画
+        }
+
+        // 如果有当前日程，直接滚动到它，不使用边界外动画（避免触发下拉刷新）
+        if (hasCurrentSchedule) {
+          final ctx = _scheduleItemKeys[currentIndex].currentContext;
+          if (ctx != null) {
+            Scrollable.ensureVisible(
+              ctx,
+              duration: const Duration(milliseconds: 300),
+              alignment: 0.0,
+            );
+          } else {
+            _scheduleScrollController.jumpTo(0);
+          }
+          return;
+        }
+
+        // 没有当前日程时，使用滚动动画
+        final maxScrollExtent =
+            _scheduleScrollController.position.maxScrollExtent;
+        final viewportHeight =
+            _scheduleScrollController.position.viewportDimension;
+
+        if (direction == -1) {
+          // 切换到前一天：从顶部滚入
+          _scheduleScrollController.jumpTo(-viewportHeight * 0.3);
+          _scheduleScrollController.animateTo(
+            0,
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeOutCubic,
+          );
+        } else {
+          // 切换到后一天：从底部滚入
+          final startPosition = maxScrollExtent + viewportHeight * 0.3;
+          _scheduleScrollController.jumpTo(
+            startPosition.clamp(0.0, double.infinity),
+          );
+          _scheduleScrollController.animateTo(
+            0,
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeOutCubic,
+          );
+        }
+        return;
+      }
+
+      // 非日期切换的常规滚动逻辑
+      if (!_isToday()) {
+        // 非今天，滚动到顶部第一个
+        if (_schedules.isNotEmpty) {
+          _scheduleScrollController.jumpTo(0);
+        }
+        return;
+      }
+
+      // 今天：检查是否有"当前"日程
+      if (hasCurrentSchedule && _shouldScrollToCurrent) {
+        // 有当前正在进行的日程（在今天）且需要滚动
+        final ctx = _scheduleItemKeys[currentIndex].currentContext;
+        if (ctx != null) {
+          // 手动计算目标位置，避免触发footer
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!_scheduleScrollController.hasClients) return;
+
+            final RenderBox? box = ctx.findRenderObject() as RenderBox?;
+            if (box == null) return;
+
+            final RenderAbstractViewport viewport = RenderAbstractViewport.of(
+              box,
+            );
+            final double targetOffset = viewport
+                .getOffsetToReveal(box, 0.2)
+                .offset;
+
+            // 获取最大滚动范围
+            final maxScrollExtent =
+                _scheduleScrollController.position.maxScrollExtent;
+
+            // 保留更大的安全边距，避免触发footer（50px安全边距）
+            // 如果当前任务在最后，宁可不完全显示也不要触发翻页
+            final maxSafeOffset = maxScrollExtent > 50
+                ? maxScrollExtent - 50
+                : 0.0;
+
+            // 如果目标位置会超出安全范围，只滚动到安全边界
+            final safeOffset = targetOffset > maxSafeOffset
+                ? maxSafeOffset
+                : targetOffset;
+
+            debugPrint(
+              '滚动到当前任务: targetOffset=$targetOffset, maxScrollExtent=$maxScrollExtent, safeOffset=$safeOffset',
+            );
+
+            _scheduleScrollController.animateTo(
+              safeOffset.clamp(0.0, maxSafeOffset),
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.easeOut,
+            );
+          });
+        }
+        _shouldScrollToCurrent = false; // 滚动后重置标记
+      } else if (_schedules.isNotEmpty && _shouldScrollToCurrent) {
+        // 没有当前日程，滚动到第一个
+        _scheduleScrollController.jumpTo(0);
+        _shouldScrollToCurrent = false; // 滚动后重置标记
+      }
     });
   }
 
-  Future<void> _selectDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2030),
-      locale: const Locale('zh', 'CN'),
-    );
+  void _backToToday() {
+    setState(() {
+      _selectedDate = DateTime.now();
+      _shouldScrollToCurrent = true; // 点击回到今天时需要滚动
+    });
+    _loadSchedules();
+  }
 
-    if (picked != null && picked != _selectedDate) {
-      setState(() {
-        _selectedDate = picked;
-      });
-      _loadSchedules();
-    }
+  void _clearChatHistory() {
+    widget.aiService.clearHistory(); // 已经包含了清空 pendingActions 和中断对话
+    setState(() {
+      _messages.clear();
+      _messages.add(
+        ChatMessage(
+          text:
+              '✅ 对话已完全重置！\n\n所有上下文已清空，这是一个全新的对话。\n\n你可以随便跟我聊天，比如：\n• "还没睡呢"\n• "明天干什么"\n• "帮我安排工作日晨练"\n\n我会根据你的日程给出建议~',
+          isUser: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+      // 递增计数器以确保 Dismissible widget 使用新的 key
+      _dismissibleKeyCounter++;
+    });
   }
 
   Future<void> _handleSubmit(String text) async {
@@ -155,152 +561,298 @@ class ScheduleScreenState extends State<ScheduleScreen> {
     final userMessage = text.trim();
     _textController.clear();
 
+    _addChatMessage(
+      ChatMessage(text: userMessage, isUser: true, timestamp: DateTime.now()),
+    );
     setState(() {
-      _messages.add(ChatMessage(
-        text: userMessage,
-        isUser: true,
-        timestamp: DateTime.now(),
-      ));
       _isLoading = true;
     });
 
-    await _saveMessages();
-    _scrollToBottom();
-
     try {
-      final response = await _gptService.chat(userMessage);
+      final response = await _aiService.chat(userMessage);
 
+      _addChatMessage(
+        ChatMessage(text: response, isUser: false, timestamp: DateTime.now()),
+      );
       setState(() {
-        _messages.add(ChatMessage(
-          text: response,
-          isUser: false,
-          timestamp: DateTime.now(),
-        ));
         _isLoading = false;
-        // 强制重建以显示新的审批卡片
       });
 
-      await _saveMessages();
-      _scrollToBottom();
-      
       // 如果有新的审批操作，打印日志
-      if (_gptService.pendingActions.isNotEmpty) {
-        print('检测到 ${_gptService.pendingActions.length} 个待审批操作');
-        for (var action in _gptService.pendingActions) {
-          print('  - ${action.description}');
+      if (_aiService.pendingActions.isNotEmpty) {
+        debugPrint('检测到 ${_aiService.pendingActions.length} 个待审批操作');
+        for (var action in _aiService.pendingActions) {
+          debugPrint('  - ${action.description}');
         }
       }
     } catch (e) {
-      setState(() {
-        _messages.add(ChatMessage(
-          text: '抱歉，处理你的请求时出错了：$e',
+      _addChatMessage(
+        ChatMessage(
+          text: '抱歉，处理你的请求时出错了：$e\n[CHECK_API_CONFIG]',
           isUser: false,
           timestamp: DateTime.now(),
           isError: true,
-        ));
+        ),
+      );
+      setState(() {
         _isLoading = false;
       });
-
-      await _saveMessages();
-      _scrollToBottom();
     }
   }
 
-  void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 300), () {
-      if (_scheduleScrollController.hasClients) {
-        _scheduleScrollController.animateTo(
-          _scheduleScrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
+  // 注意：日程列表使用 `_scheduleScrollController`，聊天消息使用 `_messageScrollController`。
+
+  // 切换面板状态并同步聊天区比例
+  void _setPanelState(PanelSizeState state) {
+    setState(() {
+      _panelState = state;
+      switch (state) {
+        case PanelSizeState.expanded:
+          _chatFraction = 0.75;
+          break;
+        case PanelSizeState.normal:
+          _chatFraction = 0.40;
+          break;
+        case PanelSizeState.minimized:
+          // 最小状态：完全贴合底边（chat 区高度为 0）
+          _chatFraction = 0.0;
+          break;
       }
     });
+  }
+
+  // 将当前 _chatFraction 捕捉到最近的三档之一
+  void _snapToNearest() {
+    final Map<PanelSizeState, double> cand = {
+      PanelSizeState.expanded: 0.75,
+      PanelSizeState.normal: 0.40,
+      // 最小状态：0.0 使面板完全收起并把拉杠贴合在底部
+      PanelSizeState.minimized: 0.0,
+    };
+
+    PanelSizeState best = PanelSizeState.normal;
+    double bestDiff = double.infinity;
+    cand.forEach((k, v) {
+      final d = (v - _chatFraction).abs();
+      if (d < bestDiff) {
+        bestDiff = d;
+        best = k;
+      }
+    });
+
+    _setPanelState(best);
   }
 
   Future<void> _approveAction(PendingAction action) async {
     try {
-      print('开始执行操作 ${action.id}, 类型: ${action.type}, 描述: ${action.description}');
-      print('操作数据: ${action.data}');
-      
-      await _gptService.executeAction(action.id);
-      
-      print('操作执行成功，清空聊天记录');
-      
-      setState(() {
-        _messages.clear();
-        _messages.add(ChatMessage(
-          text: '✓ 已执行：${action.description}\n\n有其他需要帮忙的吗？',
-          isUser: false,
-          timestamp: DateTime.now(),
-        ));
-      });
-      
-      await _saveMessages();
+      debugPrint(
+        '开始执行操作 ${action.id}, 类型: ${action.type}, 描述: ${action.description}',
+      );
+      debugPrint('操作数据: ${action.data}');
+
+      await _aiService.executeAction(action.id);
+
+      debugPrint('操作执行成功');
+
+      _shouldScrollToCurrent = false; // 审批操作刷新不触发滚动
       await _loadSchedules(); // 刷新日程列表
-      
-      print('日程列表已刷新，当前日程数量: ${_schedules.length}');
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('操作已执行，聊天记录已清空')),
+      setState(() {}); // 触发重建以更新审批列表
+
+      debugPrint('日程列表已刷新，当前日程数量: ${_schedules.length}');
+
+      // 检查是否所有审批都完成了
+      if (_aiService.pendingActions.isEmpty) {
+        _addChatMessage(
+          ChatMessage(
+            text: '✅ 需求已完成！建议清空对话以提高反应速度。',
+            isUser: false,
+            timestamp: DateTime.now(),
+            showClearButton: true,
+          ),
         );
       }
-    } catch (e) {
-      print('执行操作失败: $e');
-      print('堆栈跟踪: ${StackTrace.current}');
-      
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('执行失败：$e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
+        SnackBarHelper.showMessage(context, '✓ 已执行：${action.description}');
+      }
+    } catch (e) {
+      debugPrint('执行操作失败: $e');
+      debugPrint('堆栈跟踪: ${StackTrace.current}');
+
+      if (mounted) {
+        SnackBarHelper.showError(
+          context,
+          '执行失败：$e',
+          duration: const Duration(seconds: 5),
         );
       }
     }
   }
 
-  void _rejectAction(PendingAction action) {
-    _gptService.rejectAction(action.id);
-    setState(() {
-      _messages.add(ChatMessage(
-        text: '✗ 已拒绝：${action.description}',
-        isUser: false,
-        timestamp: DateTime.now(),
-      ));
-    });
-    _saveMessages();
-  }
+  Future<void> _showDayTypeDialog() async {
+    final dayService = Provider.of<DayService>(context, listen: false);
 
-  void _clearHistory() {
-    showDialog(
+    // 规范化日期（去除时间部分）
+    final normalizedDay = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+    );
+
+    // 获取当前的覆盖设置
+    final currentOverride = dayService.getDayOverride(normalizedDay);
+
+    // 获取默认日期类型（临时移除覆盖后获取）
+    DayType defaultDayType;
+    if (currentOverride != null) {
+      // 如果有覆盖，暂时移除以获取默认类型
+      final holiday = await dayService.getHoliday(normalizedDay);
+      if (holiday != null) {
+        defaultDayType = holiday.isWorkday ? DayType.workday : DayType.holiday;
+      } else {
+        // 根据工作制判断
+        if (!mounted) return;
+        final workScheduleService = Provider.of<WorkScheduleService>(
+          context,
+          listen: false,
+        );
+        final isRestDay = workScheduleService.isRestDay(normalizedDay);
+        defaultDayType = isRestDay ? DayType.weekend : DayType.workday;
+      }
+    } else {
+      // 没有覆盖，直接使用当前类型
+      defaultDayType = _dayType ?? DayType.workday;
+    }
+
+    if (!mounted) return;
+
+    // 判断默认是工作日还是休息日
+    final isDefaultWorkday = defaultDayType == DayType.workday;
+
+    final result = await showDialog<DayType?>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('清空对话'),
-        content: const Text('确定要清空所有对话记录吗？'),
+        title: Text(DateFormat('yyyy年MM月dd日').format(normalizedDay)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 显示当前状态
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: currentOverride != null
+                    ? Theme.of(context).colorScheme.secondaryContainer
+                    : Theme.of(context).colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: currentOverride != null
+                      ? Theme.of(context).colorScheme.secondary
+                      : Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    currentOverride != null
+                        ? Icons.edit_calendar
+                        : Icons.info_outline,
+                    size: 20,
+                    color: currentOverride != null
+                        ? Theme.of(context).colorScheme.secondary
+                        : Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      currentOverride != null
+                          ? '已手动设置为：${currentOverride.dayType.displayName}'
+                          : '默认为：${defaultDayType.displayName}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: currentOverride != null
+                            ? Theme.of(context).colorScheme.onSecondaryContainer
+                            : Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // 根据默认类型显示不同选项
+            if (isDefaultWorkday) ...[
+              // 工作日：显示"设置休假"
+              ListTile(
+                leading: Icon(Icons.beach_access, color: Colors.green.shade600),
+                title: const Text('设置休假'),
+                subtitle: const Text('今天休息，不工作'),
+                onTap: () => Navigator.pop(context, DayType.weekend),
+              ),
+            ] else ...[
+              // 休息日：显示"设置加班"
+              ListTile(
+                leading: Icon(Icons.work, color: Colors.blue.shade600),
+                title: const Text('设置加班'),
+                subtitle: const Text('今天需要工作'),
+                onTap: () => Navigator.pop(context, DayType.workday),
+              ),
+            ],
+
+            const Divider(),
+
+            // 恢复默认选项
+            if (currentOverride != null)
+              ListTile(
+                leading: Icon(Icons.restore, color: Colors.grey.shade600),
+                title: const Text('恢复默认'),
+                subtitle: Text('按工作制自动判断（${defaultDayType.displayName}）'),
+                onTap: () => Navigator.pop(context, null),
+              ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('取消'),
           ),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _messages.clear();
-                _gptService.clearHistory();
-                _gptService.pendingActions.clear();
-                _addWelcomeMessage();
-              });
-              _saveMessages();
-              Navigator.pop(context);
-            },
-            child: const Text('确定'),
-          ),
         ],
       ),
     );
+
+    if (result != null) {
+      // 用户选择了新的类型
+      await dayService.setDayOverride(normalizedDay, result);
+      _shouldScrollToCurrent = false; // 类型切换刷新不触发滚动
+      _loadSchedules();
+    } else if (currentOverride != null && result == null) {
+      // 用户选择恢复默认
+      await dayService.removeDayOverride(normalizedDay);
+      _shouldScrollToCurrent = false; // 类型切换刷新不触发滚动
+      _loadSchedules();
+    }
+  }
+
+  void _rejectAction(PendingAction action) {
+    _aiService.rejectAction(action.id);
+    setState(() {}); // 触发重建以更新审批列表
+
+    // 检查是否所有审批都完成了
+    if (_aiService.pendingActions.isEmpty) {
+      _addChatMessage(
+        ChatMessage(
+          text: '✅ 需求已完成！建议清空对话以提高反应速度。',
+          isUser: false,
+          timestamp: DateTime.now(),
+          showClearButton: true,
+        ),
+      );
+    }
+
+    if (mounted) {
+      SnackBarHelper.showMessage(context, '✗ 已拒绝：${action.description}');
+    }
   }
 
   @override
@@ -309,724 +861,600 @@ class ScheduleScreenState extends State<ScheduleScreen> {
       appBar: AppBar(
         title: const Text('AI 日程'),
         actions: [
+          if (!_isToday())
+            IconButton(
+              icon: const Icon(Icons.today),
+              tooltip: '返回今天',
+              onPressed: _backToToday,
+            ),
           IconButton(
-            icon: const Icon(Icons.today),
+            icon: const Icon(Icons.settings),
+            tooltip: '设置',
             onPressed: () {
-              setState(() {
-                _selectedDate = DateTime.now();
-              });
-              _loadSchedules();
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
+              );
             },
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: _clearHistory,
-            tooltip: '清空对话',
           ),
         ],
       ),
       body: Column(
         children: [
-          // 日期选择器（固定顶部）
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+          ScheduleHeader(
+            selectedDate: _selectedDate,
+            dayType: _dayType,
+            holiday: _holiday,
+            isToday: _isToday(),
+            onLongPressDayType: _showDayTypeDialog,
+            onAddSchedule: _showAddScheduleDialog,
+          ),
+
+          if (_aiService.pendingActions.isNotEmpty)
+            ApprovalCardList(
+              actions: _aiService.pendingActions,
+              onApprove: _approveAction,
+              onReject: _rejectAction,
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        DateFormat('yyyy年MM月dd日 EEEE', 'zh_CN').format(_selectedDate),
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          _buildDayTypeChip(),
-                          if (_holiday != null) ...[
-                            const SizedBox(width: 8),
-                            Chip(
-                              label: Text(_holiday!.name),
-                              backgroundColor: Colors.red.shade100,
-                              padding: EdgeInsets.zero,
-                              visualDensity: VisualDensity.compact,
+
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                const double expandedFraction = 0.75;
+                const double normalFraction = 0.40;
+                // 将最小状态设置为 0.0 — 聊天区可完全收起以便拉杠贴合底部
+                const double minimizedFraction = 0.0;
+
+                double chatFraction;
+                if (_panelState == PanelSizeState.expanded) {
+                  chatFraction = expandedFraction;
+                } else if (_panelState == PanelSizeState.minimized) {
+                  chatFraction = minimizedFraction;
+                } else {
+                  chatFraction = normalFraction;
+                }
+
+                if (_isDragging) chatFraction = _chatFraction;
+
+                final double totalH = constraints.maxHeight;
+                const double handleH = 18.0;
+                // 允许 chat 区高度为 0，使其可以完全收起
+                // clamp's max must be >= min; ensure max is non-negative
+                final double maxChatH = (totalH - 80.0) <= 0.0
+                    ? 0.0
+                    : (totalH - 80.0);
+                final double chatH = (totalH * chatFraction).clamp(
+                  0.0,
+                  maxChatH,
+                );
+                // schedule 区最大允许到 totalH - handleH（当 chat 为 0 时，schedule 可以占满剩余空间）
+                final double maxScheduleH = (totalH - handleH) <= 0.0
+                    ? 0.0
+                    : (totalH - handleH);
+                final double scheduleH = (totalH - chatH - handleH).clamp(
+                  0.0,
+                  maxScheduleH,
+                );
+
+                // 仅在审批窗首次弹出时自动调整到第二档
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  final currentCount = _aiService.pendingActions.length;
+                  // 当审批数量从0变为>0时，说明审批窗首次弹出
+                  if (mounted &&
+                      _lastPendingActionsCount == 0 &&
+                      currentCount > 0 &&
+                      _panelState != PanelSizeState.normal) {
+                    _setPanelState(PanelSizeState.normal);
+                  }
+                  _lastPendingActionsCount = currentCount;
+                });
+
+                return Column(
+                  children: [
+                    SizedBox(
+                      height: scheduleH,
+                      child: _schedules.isEmpty
+                          ? SmartRefresher(
+                              controller: _refreshController,
+                              enablePullDown: true,
+                              enablePullUp: true,
+                              header: buildSwitchRefreshHeader(isTop: true),
+                              footer: buildCustomPullFooter(),
+                              onRefresh: _onRefresh,
+                              onLoading: _onLoading,
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  return SingleChildScrollView(
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        minHeight: constraints.maxHeight,
+                                      ),
+                                      child: Center(
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.event_note,
+                                              size: 48,
+                                              color: Colors.grey.shade400,
+                                            ),
+                                            const SizedBox(height: 12),
+                                            Text(
+                                              '暂无日程',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                color: Colors.grey.shade600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            )
+                          : SmartRefresher(
+                              controller: _refreshController,
+                              enablePullDown: true,
+                              enablePullUp: true,
+                              header: buildSwitchRefreshHeader(isTop: true),
+                              footer: buildCustomPullFooter(),
+                              onRefresh: _onRefresh,
+                              onLoading: _onLoading,
+                              child: ListView.builder(
+                                controller: _scheduleScrollController,
+                                itemCount: () {
+                                  // 检查昨天最后一个是否是当前项
+                                  final (currentInfoIndex, isPrevCurrent) =
+                                      _getCurrentScheduleInfo();
+                                  final showPrevLast =
+                                      isPrevCurrent &&
+                                      _prevSchedules.isNotEmpty;
+                                  final hasPrev = showPrevLast;
+                                  final hasNext = _nextSchedules.isNotEmpty;
+
+                                  return (hasPrev ? 2 : 0) +
+                                      _schedules.length +
+                                      (hasNext ? 2 : 0);
+                                }(),
+                                itemBuilder: (context, index) {
+                                  int currentIndex = index;
+                                  final (currentInfoIndex, isPrevCurrent) =
+                                      _getCurrentScheduleInfo();
+                                  final showPrevLast =
+                                      isPrevCurrent &&
+                                      _prevSchedules.isNotEmpty;
+                                  final hasPrev = showPrevLast;
+                                  final hasNext = _nextSchedules.isNotEmpty;
+
+                                  if (hasPrev) {
+                                    // 前一天最后一个作为当前项时，显示在今天第一个之前
+                                    if (currentIndex == 0) {
+                                      return _buildScheduleItemPrevAsCurrent(
+                                        _prevSchedules.last,
+                                      );
+                                    }
+                                    currentIndex -= 1;
+                                    // 在前一天最后一项和今天第一项之间添加分隔符
+                                    if (currentIndex == 0 &&
+                                        _schedules.isNotEmpty) {
+                                      return _buildSectionDivider('—今天—');
+                                    }
+                                    if (_schedules.isNotEmpty) {
+                                      currentIndex -= 1;
+                                    }
+                                  }
+
+                                  // 今天的日程
+                                  if (currentIndex < _schedules.length) {
+                                    return _buildScheduleItem(
+                                      _schedules[currentIndex],
+                                    );
+                                  }
+                                  currentIndex -= _schedules.length;
+
+                                  if (hasNext) {
+                                    if (currentIndex == 0) {
+                                      return _buildSectionDivider('—后一天—');
+                                    }
+                                    if (currentIndex == 1) {
+                                      return _buildScheduleItemGrey(
+                                        _nextSchedules.first,
+                                      );
+                                    }
+                                  }
+
+                                  return const SizedBox.shrink();
+                                },
+                              ),
                             ),
-                          ],
-                          // 如果是当天，显示"当天"标签（放在最后）
-                          if (_isToday()) ...[
-                            const SizedBox(width: 8),
-                            Chip(
-                              label: const Text('当天', style: TextStyle(fontSize: 12)),
-                              backgroundColor: Colors.blue.shade100,
-                              padding: EdgeInsets.zero,
-                              visualDensity: VisualDensity.compact,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.calendar_today),
-                  onPressed: _selectDate,
-                  tooltip: '选择日期',
-                ),
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert),
-                  tooltip: '更多操作',
-                  onSelected: (value) {
-                    switch (value) {
-                      case 'export_json':
-                        _exportToJson();
-                        break;
-                      case 'export_text':
-                        _exportToText();
-                        break;
-                      case 'import':
-                        _importFromJson();
-                        break;
-                      case 'quick_backup':
-                        _quickBackup();
-                        break;
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'export_json',
-                      child: Row(
-                        children: [
-                          Icon(Icons.upload_file, size: 20),
-                          SizedBox(width: 8),
-                          Text('导出JSON'),
-                        ],
-                      ),
                     ),
-                    const PopupMenuItem(
-                      value: 'export_text',
-                      child: Row(
-                        children: [
-                          Icon(Icons.description, size: 20),
-                          SizedBox(width: 8),
-                          Text('导出文本'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'import',
-                      child: Row(
-                        children: [
-                          Icon(Icons.download, size: 20),
-                          SizedBox(width: 8),
-                          Text('导入规则'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuDivider(),
-                    const PopupMenuItem(
-                      value: 'quick_backup',
-                      child: Row(
-                        children: [
-                          Icon(Icons.backup, size: 20),
-                          SizedBox(width: 8),
-                          Text('快速备份'),
-                        ],
+                    SizedBox(
+                      height: chatH + handleH,
+                      child: ChatPanel(
+                        messages: _messages,
+                        controller: _messageScrollController,
+                        isLoading: _isLoading,
+                        onCheckApiConfig: () =>
+                            _openApiConfigDialog(highlight: true),
+                        onClearHistory: _clearChatHistory,
+                        dismissibleKey: ValueKey(
+                          'dismissible_$_dismissibleKeyCounter',
+                        ),
+                        onDragStart: (details) {
+                          setState(() {
+                            _isDragging = true;
+                          });
+                        },
+                        onDragUpdate: (details) {
+                          setState(() {
+                            _chatFraction =
+                                (_chatFraction - details.delta.dy / totalH)
+                                    .clamp(minimizedFraction, expandedFraction);
+                          });
+                        },
+                        onDragEnd: (details) {
+                          setState(() {
+                            _isDragging = false;
+                            _snapToNearest();
+                          });
+                        },
+                        onTap: () {
+                          setState(() {
+                            if (_panelState == PanelSizeState.normal) {
+                              _setPanelState(PanelSizeState.expanded);
+                            } else if (_panelState == PanelSizeState.expanded) {
+                              _setPanelState(PanelSizeState.minimized);
+                            } else {
+                              _setPanelState(PanelSizeState.normal);
+                            }
+                          });
+                        },
                       ),
                     ),
                   ],
-                ),
-              ],
-            ),
-          ),
-
-          // 待审批操作卡片区域（固定在日期下方）
-          if (_gptService.pendingActions.isNotEmpty)
-            Container(
-              constraints: const BoxConstraints(maxHeight: 120),
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                itemCount: _gptService.pendingActions.length,
-                itemBuilder: (context, index) {
-                  return _buildApprovalCard(_gptService.pendingActions[index]);
-                },
-              ),
-            ),
-
-          // 日程区域（占3/5高度，独立滚动）
-          Expanded(
-            flex: 3,
-            child: _schedules.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.event_note,
-                          size: 64,
-                          color: Colors.grey.shade400,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          '暂无日程',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    controller: _scheduleScrollController,
-                    itemCount: _schedules.length,
-                    itemBuilder: (context, index) => _buildScheduleItem(_schedules[index]),
-                  ),
-          ),
-
-          // 几乎看不见的分割线
-          Container(
-            height: 1,
-            color: Colors.grey.shade200,
-          ),
-
-          // AI对话区域（占2/5高度，独立滚动）
-          Expanded(
-            flex: 2,
-            child: Column(
-              children: [
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) => _buildMessageBubble(_messages[index], index),
-                  ),
-                ),
-                // 加载指示器
-                if (_isLoading)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '正在思考..',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
+                );
+              },
             ),
           ),
 
           // 输入框（固定底部）
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 4,
-                  offset: const Offset(0, -2),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _textController,
-                    decoration: InputDecoration(
-                      hintText: '随便聊聊...',
-                      hintStyle: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey.shade100,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      isDense: true,
-                    ),
-                    style: const TextStyle(fontSize: 14),
-                    maxLines: null,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: _handleSubmit,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.send, size: 22),
-                  onPressed: () => _handleSubmit(_textController.text),
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ],
-            ),
+          ChatInputBar(
+            controller: _textController,
+            isLoading: _isLoading,
+            onSubmit: _handleSubmit,
+            onTap: () =>
+                setState(() => _setPanelState(PanelSizeState.expanded)),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDayTypeChip() {
-    if (_dayType == null) return const SizedBox.shrink();
+  // 切换日期函数
+  void _changeDateByDays(int days) async {
+    final oldYear = _selectedDate.year;
+    setState(() {
+      _selectedDate = _selectedDate.add(Duration(days: days));
+    });
 
-    Color bgColor;
-    Color textColor;
-    IconData icon;
-
-    switch (_dayType!) {
-      case DayType.workday:
-        bgColor = Colors.blue.shade100;
-        textColor = Colors.blue.shade900;
-        icon = Icons.work_outline;
-        break;
-      case DayType.weekend:
-        bgColor = Colors.green.shade100;
-        textColor = Colors.green.shade900;
-        icon = Icons.weekend;
-        break;
-      case DayType.holiday:
-        bgColor = Colors.red.shade100;
-        textColor = Colors.red.shade900;
-        icon = Icons.celebration;
-        break;
+    // 如果切换到了新的年份，确保该年份的节假日已缓存
+    if (_selectedDate.year != oldYear) {
+      final holidayService = Provider.of<HolidayService>(
+        context,
+        listen: false,
+      );
+      await holidayService.ensureYearCached(_selectedDate.year);
     }
 
-    return Chip(
-      avatar: Icon(icon, size: 16, color: textColor),
-      label: Text(_dayType!.displayName),
-      backgroundColor: bgColor,
-      labelStyle: TextStyle(color: textColor, fontSize: 12),
-      padding: EdgeInsets.zero,
-      visualDensity: VisualDensity.compact,
-    );
+    _loadSchedules();
   }
+
+  // _performFinalOverscrollCheck 已弃用：翻页决策统一由松手时的即时提示状态决定（_readyToSwitch / _hintOpacity）
+
+  // Day type chip is handled by ScheduleHeader now.
 
   /// 判断选中的日期是否为今天
   bool _isToday() {
     final now = DateTime.now();
     return _selectedDate.year == now.year &&
-           _selectedDate.month == now.month &&
-           _selectedDate.day == now.day;
+        _selectedDate.month == now.month &&
+        _selectedDate.day == now.day;
   }
 
   /// 导出JSON
-  Future<void> _exportToJson() async {
-    try {
-      final dbService = Provider.of<DatabaseService>(context, listen: false);
-      final exportService = ImportExportService(dbService);
-      
-      final path = await exportService.exportToJson();
-      
-      if (path != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('已导出至: $path'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('导出失败: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
 
-  /// 导出文本
-  Future<void> _exportToText() async {
-    try {
-      final dbService = Provider.of<DatabaseService>(context, listen: false);
-      final exportService = ImportExportService(dbService);
-      
-      final path = await exportService.exportToText();
-      
-      if (path != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('已导出至: $path'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('导出失败: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  /// 导入JSON
-  Future<void> _importFromJson() async {
-    // 显示选择对话框
-    final merge = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('导入方式'),
-        content: const Text('选择导入模式：'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('清空后导入'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('合并导入'),
-          ),
-        ],
-      ),
-    );
-    
-    if (merge == null) return;
-    
-    try {
-      final dbService = Provider.of<DatabaseService>(context, listen: false);
-      final exportService = ImportExportService(dbService);
-      
-      final result = await exportService.importFromJson(merge: merge);
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result.message),
-            backgroundColor: result.success ? Colors.green : Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-        
-        if (result.success) {
-          // 重新加载日程
-          _loadSchedules();
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('导入失败: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  /// 快速备份
-  Future<void> _quickBackup() async {
-    try {
-      final dbService = Provider.of<DatabaseService>(context, listen: false);
-      final exportService = ImportExportService(dbService);
-      
-      final path = await exportService.quickExport();
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('已备份至文档目录: $path'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: '复制路径',
-              textColor: Colors.white,
-              onPressed: () {
-                // TODO: 复制路径到剪贴板
-              },
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('备份失败: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  /// 获取当前正在进行的日程索引（如果是今天）
-  int? _getCurrentScheduleIndex() {
+  /// 获取下一项待办日程索引（如果是今天）
+  int? _getNextScheduleIndex() {
     if (!_isToday()) return null;
-    
+
     final now = DateTime.now();
+
+    // 找第一个未开始的日程（不管是否完成）
     for (int i = 0; i < _schedules.length; i++) {
       final schedule = _schedules[i];
-      if (schedule.isCompleted) continue;
-      
+
+      // 如果没有开始时间，或者开始时间在未来
+      if (schedule.startTime == null || now.isBefore(schedule.startTime!)) {
+        return i;
+      }
+    }
+
+    return null;
+  }
+
+  /// 计算日程的嵌套层级（被多少个任务包含）
+  int _getNestedLevel(int index) {
+    if (index <= 0) return 0;
+
+    final current = _schedules[index];
+    int level = 0;
+
+    // 从当前任务往前查找，计算被包含的层级
+    for (int i = index - 1; i >= 0; i--) {
+      if (_isContainedBy(_schedules[i], current)) {
+        // 当前任务被第i个任务包含
+        // 递归计算第i个任务的层级，然后加1
+        level = _getNestedLevel(i) + 1;
+        break; // 找到最近的包含任务就停止
+      }
+    }
+
+    return level;
+  }
+
+  /// 检查日程b是否被a包含
+  bool _isContainedBy(Schedule a, Schedule b) {
+    if (a.startTime == null || b.startTime == null) return false;
+
+    // a必须有结束时间才能包含其他任务
+    if (a.endTime == null) return false;
+
+    // b在a的时间范围内开始
+    final bStartsInside =
+        (b.startTime!.isAfter(a.startTime!) ||
+            b.startTime!.isAtSameMomentAs(a.startTime!)) &&
+        b.startTime!.isBefore(a.endTime!);
+
+    if (!bStartsInside) return false;
+
+    // 如果b有结束时间，必须在a结束前结束
+    if (b.endTime != null) {
+      return b.endTime!.isBefore(a.endTime!) ||
+          b.endTime!.isAtSameMomentAs(a.endTime!);
+    }
+
+    // b是瞬时任务且在a范围内开始
+    return true;
+  }
+
+  /// 获取当前正在进行的日程索引和来源（如果是今天）
+  /// 返回: (索引, 是否来自前一天) - 如果索引为null则没有当前日程
+  (int?, bool) _getCurrentScheduleInfo() {
+    if (!_isToday()) return (null, false);
+
+    final now = DateTime.now();
+
+    // 优先检查前一天是否有跨日日程（正在进行中）
+    if (_prevSchedules.isNotEmpty) {
+      final lastPrev = _prevSchedules.last;
+
+      // 检查前一天最后一项是否有结束时间且还在进行中
+      if (lastPrev.endTime != null && lastPrev.startTime != null) {
+        // 如果当前时间在开始和结束之间，说明跨日日程还在进行中
+        if (now.isAfter(lastPrev.startTime!) &&
+            now.isBefore(lastPrev.endTime!)) {
+          return (_prevSchedules.length - 1, true);
+        }
+      }
+    }
+
+    // 方法1：优先找时间匹配的当前项（正在进行中的）
+    int? matchedIndex;
+    for (int i = _schedules.length - 1; i >= 0; i--) {
+      final schedule = _schedules[i];
+
       if (schedule.startTime != null) {
-        // 有开始时间
-        if (schedule.endTime != null) {
-          // 有结束时间：在时间范围内
-          if (now.isAfter(schedule.startTime!) && now.isBefore(schedule.endTime!)) {
-            return i;
-          }
-        } else {
-          // 无结束时间：开始时间已到且下一项未开始
-          if (now.isAfter(schedule.startTime!)) {
-            // 检查下一项是否已开始
+        // 检查是否已开始
+        if (now.isAfter(schedule.startTime!) ||
+            now.isAtSameMomentAs(schedule.startTime!)) {
+          // 如果有结束时间，检查是否还未结束
+          if (schedule.endTime != null) {
+            if (now.isBefore(schedule.endTime!)) {
+              matchedIndex = i; // 正在进行中，从后往前找第一个
+              break;
+            }
+          } else {
+            // 没有结束时间，检查下一项是否已开始
+            bool nextStarted = false;
             if (i + 1 < _schedules.length) {
               final next = _schedules[i + 1];
-              if (next.startTime == null || now.isBefore(next.startTime!)) {
-                return i;
+              if (next.startTime != null &&
+                  (now.isAfter(next.startTime!) ||
+                      now.isAtSameMomentAs(next.startTime!))) {
+                nextStarted = true;
               }
-            } else {
-              return i; // 最后一项
+            }
+            if (!nextStarted) {
+              matchedIndex = i;
+              break;
             }
           }
         }
       }
     }
-    return null;
+
+    if (matchedIndex != null) {
+      return (matchedIndex, false);
+    }
+
+    // 方法2：没有时间匹配的，用"下一项的前一个"作为当前项
+    final nextIndex = _getNextScheduleIndex();
+    if (nextIndex != null && nextIndex > 0) {
+      return (nextIndex - 1, false);
+    } else if (nextIndex == null && _schedules.isNotEmpty) {
+      // 没有下一项，最后一项作为当前
+      return (_schedules.length - 1, false);
+    }
+
+    // 当天没有正在进行的日程
+    return (null, false);
   }
 
-  /// 获取下一项待办日程索引（如果是今天）
-  int? _getNextScheduleIndex() {
-    if (!_isToday()) return null;
-    
-    final current = _getCurrentScheduleIndex();
-    if (current != null) {
-      // 有当前项，返回下一个未完成的
-      for (int i = current + 1; i < _schedules.length; i++) {
-        if (!_schedules[i].isCompleted) {
-          return i;
-        }
-      }
-    } else {
-      // 无当前项，返回第一个未开始且未完成的
-      final now = DateTime.now();
-      for (int i = 0; i < _schedules.length; i++) {
-        final schedule = _schedules[i];
-        if (schedule.isCompleted) continue;
-        if (schedule.startTime == null || now.isBefore(schedule.startTime!)) {
-          return i;
-        }
-      }
-    }
-    return null;
+  /// 兼容性方法：获取当前正在进行的日程索引
+  int? _getCurrentScheduleIndex() {
+    final (index, isPrev) = _getCurrentScheduleInfo();
+    return isPrev ? null : index; // 只返回当天的索引
+  }
+
+  Widget _buildSectionDivider(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12,
+          color: Colors.grey.shade500,
+          fontWeight: FontWeight.w500,
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
   }
 
   Widget _buildScheduleItem(Schedule schedule) {
     final index = _schedules.indexOf(schedule);
     final currentIndex = _getCurrentScheduleIndex();
     final nextIndex = _getNextScheduleIndex();
-    
+
     final isCurrent = index == currentIndex;
     final isNext = index == nextIndex;
-    
-    // 确定卡片样式
-    Color bgColor;
-    Color borderColor;
-    Widget? statusBadge;
-    
-    if (isCurrent) {
-      bgColor = Colors.green.shade50;
-      borderColor = Colors.green.shade400;
-      statusBadge = Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: Colors.green.shade500,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Text(
-          '当前',
-          style: TextStyle(
-            fontSize: 11,
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      );
-    } else if (isNext) {
-      bgColor = Colors.orange.shade50;
-      borderColor = Colors.orange.shade400;
-      statusBadge = Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: Colors.orange.shade500,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Text(
-          '下一项',
-          style: TextStyle(
-            fontSize: 11,
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      );
-    } else {
-      bgColor = Colors.blue.shade50;
-      borderColor = Colors.transparent;
-      statusBadge = null;
-    }
-    
-    return GestureDetector(
-      onLongPress: () => _showDeleteDialog(schedule),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(12),
-          border: (isCurrent || isNext) ? Border.all(color: borderColor, width: 2) : null,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(isCurrent ? 0.15 : (isNext ? 0.1 : 0.05)),
-              blurRadius: isCurrent ? 8 : 4,
-              offset: Offset(0, isCurrent ? 3 : 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Checkbox(
-              value: schedule.isCompleted,
-              onChanged: (value) async {
-                final dbService = Provider.of<DatabaseService>(context, listen: false);
-                final updated = schedule.copyWith(isCompleted: value);
-                await dbService.updateSchedule(updated);
-                _loadSchedules();
-              },
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      if (statusBadge != null) ...[
-                        statusBadge,
-                        const SizedBox(width: 8),
-                      ],
-                      Expanded(
-                        child: Text(
-                          schedule.title,
-                          style: TextStyle(
-                            decoration: schedule.isCompleted ? TextDecoration.lineThrough : null,
-                            fontSize: 15,
-                            fontWeight: (isCurrent || isNext) ? FontWeight.w600 : FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: _getPriorityColor(schedule.priority),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          _getPriorityLabel(schedule),
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (schedule.startTime != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      DateFormat('HH:mm').format(schedule.startTime!),
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
-                  if (schedule.description != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      schedule.description!,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            // 编辑按钮
-            IconButton(
-              icon: Icon(Icons.edit_outlined, size: 20, color: Colors.grey.shade600),
-              onPressed: () => _showEditDialog(schedule),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            ),
-          ],
-        ),
+
+    // 计算嵌套层级
+    int nestedLevel = 0;
+
+    return FutureBuilder<bool>(
+      future: SharedPreferences.getInstance().then(
+        (prefs) => prefs.getBool('show_nested_schedules') ?? false,
       ),
+      builder: (context, snapshot) {
+        if (snapshot.hasData && snapshot.data == true) {
+          nestedLevel = _getNestedLevel(index);
+        }
+
+        return ScheduleItem(
+          key: index >= 0 && index < _scheduleItemKeys.length
+              ? _scheduleItemKeys[index]
+              : null,
+          schedule: schedule,
+          isCurrent: isCurrent,
+          isNext: isNext,
+          readOnly: false,
+          prevAsCurrent: false,
+          nestedLevel: nestedLevel,
+          priorityLabel: _getPriorityLabel(schedule),
+          priorityColor: _getPriorityColor(schedule),
+          hasOverride: _hasOverride(schedule),
+          onEdit: () async {
+            // 当点击编辑按钮时，最小化聊天窗口
+            if (_panelState != PanelSizeState.minimized) {
+              setState(() {
+                _setPanelState(PanelSizeState.minimized);
+              });
+            }
+            // 显示动作菜单
+            await _showScheduleActionMenu(schedule);
+          },
+          onToggleComplete: (value) async {
+            final dbService = Provider.of<DatabaseService>(
+              context,
+              listen: false,
+            );
+
+            // 如果是规则生成的日程,使用 override 记录完成状态
+            if (schedule.sourceTemplateId != null) {
+              await dbService.toggleScheduleComplete(
+                schedule.date,
+                schedule.sourceTemplateId!,
+                value ?? false,
+              );
+            } else {
+              // 如果是独立日程(非规则生成),直接更新 Schedule 对象
+              final updated = schedule.copyWith(isCompleted: value);
+              await dbService.updateSchedule(updated);
+            }
+
+            await _loadSchedules();
+          },
+        );
+      },
     );
   }
 
-  /// 获取优先级颜色
-  Color _getPriorityColor(SchedulePriority priority) {
-    switch (priority) {
-      case SchedulePriority.daily:
-        return Colors.grey.shade400; // 每天 - 灰色
-      case SchedulePriority.template:
-        return Colors.green.shade400; // 工作日/休息日 - 绿色
-      case SchedulePriority.weekendOrHoliday:
-        return Colors.pink.shade300; // 周末/节假日 - 粉色
-      case SchedulePriority.weekly:
-        return Colors.orange.shade400; // 周X - 橙色
-      case SchedulePriority.specific:
-        return Colors.purple.shade400; // 特定日期 - 紫色
-    }
+  /// 渲染灰色（仅查看）风格的日程项，点击不生效
+  Widget _buildScheduleItemGrey(Schedule schedule) {
+    return ScheduleItem(
+      schedule: schedule,
+      readOnly: true,
+      prevAsCurrent: false,
+      priorityLabel: _getPriorityLabel(schedule),
+      priorityColor: _getPriorityColor(schedule),
+    );
   }
 
-  /// 获取优先级标签
+  /// 渲染前一天的日程作为"当前"（当今天所有日程都过期时）
+  Widget _buildScheduleItemPrevAsCurrent(Schedule schedule) {
+    return ScheduleItem(
+      schedule: schedule,
+      readOnly: true,
+      prevAsCurrent: true,
+      priorityLabel: _getPriorityLabel(schedule),
+      priorityColor: _getPriorityColor(schedule),
+    );
+  }
+
+  /// 获取日程类型颜色（基于规则条件类型）
+  Color _getPriorityColor(Schedule schedule) {
+    if (schedule.sourceTemplateId != null) {
+      final rule = _rulesCache[schedule.sourceTemplateId];
+      if (rule != null) {
+        switch (rule.condition.type) {
+          case ConditionType.daily:
+            return Colors.grey.shade400; // 每天 - 灰色
+          case ConditionType.restday:
+          case ConditionType.workday:
+            return Colors.green.shade400; // 工作日/休息日 - 绿色
+          case ConditionType.weekend:
+          case ConditionType.holiday:
+            return Colors.pink.shade300; // 周末/节假日 - 粉色
+          case ConditionType.weekday:
+            return Colors.orange.shade400; // 周X - 橙色
+          case ConditionType.interval:
+          case ConditionType.specificDate:
+            return Colors.purple.shade400; // 间隔/特定日期 - 紫色
+        }
+      }
+    }
+    // 默认颜色
+    return Colors.grey.shade400;
+  }
+
+  /// 检查日程是否有覆盖（非完成状态覆盖）
+  bool _hasOverride(Schedule schedule) {
+    if (schedule.sourceTemplateId == null) return false;
+    return _overridesCache.any(
+      (o) =>
+          o.ruleId == schedule.sourceTemplateId &&
+          o.type != OverrideType.complete,
+    );
+  }
+
+  /// 获取日程类型标签（基于规则条件类型）
   String _getPriorityLabel(Schedule schedule) {
     // 如果有源规则ID，从规则获取精确类型
     if (schedule.sourceTemplateId != null) {
@@ -1053,509 +1481,125 @@ class ScheduleScreenState extends State<ScheduleScreen> {
         }
       }
     }
-    
-    // 降级到优先级显示
-    switch (schedule.priority) {
-      case SchedulePriority.daily:
-        return '每天';
-      case SchedulePriority.template:
-        return '模板';
-      case SchedulePriority.weekendOrHoliday:
-        return '周末节假日';
-      case SchedulePriority.weekly:
-        return '每周';
-      case SchedulePriority.specific:
-        return '特殊';
-    }
+
+    // 默认显示
+    return '单次';
   }
 
-  /// 显示编辑对话框
-  void _showEditDialog(Schedule schedule) {
-    final titleController = TextEditingController(text: schedule.title);
-    final descController = TextEditingController(text: schedule.description ?? '');
-    TimeOfDay? selectedTime = schedule.startTime != null
-        ? TimeOfDay(hour: schedule.startTime!.hour, minute: schedule.startTime!.minute)
-        : null;
-    
-    // 判断是否为规则生成的日程（有sourceTemplateId或priority不为specific）
-    final isFromRule = schedule.sourceTemplateId != null || 
-                       schedule.priority != SchedulePriority.specific;
-    bool modifyOnlyToday = true; // 默认仅修改今天
+  Future<void> _showScheduleActionMenu(Schedule schedule) async {
+    if (schedule.sourceTemplateId == null) {
+      // 独立日程，只能删除
+      await _showDeleteDialog(schedule);
+      return;
+    }
 
-    showDialog(
+    // 规则日程，显示编辑规则或管理覆盖的选项
+    final action = await showDialog<String>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('编辑日程'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(
-                    labelText: '标题',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: descController,
-                  decoration: const InputDecoration(
-                    labelText: '描述（可选）',
-                    border: OutlineInputBorder(),
-                  ),
-                  maxLines: 2,
-                ),
-                const SizedBox(height: 16),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    selectedTime != null
-                        ? '时间: ${selectedTime!.format(context)}'
-                        : '未设置时间',
-                  ),
-                  trailing: const Icon(Icons.access_time),
-                  onTap: () async {
-                    final time = await showTimePicker(
-                      context: context,
-                      initialTime: selectedTime ?? TimeOfDay.now(),
-                    );
-                    if (time != null) {
-                      setState(() => selectedTime = time);
-                    }
-                  },
-                ),
-                // 如果是规则生成的日程，显示修改范围选项
-                if (isFromRule) ...[
-                  const Divider(height: 24),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.orange.shade200),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.info_outline, size: 16, color: Colors.orange.shade700),
-                            const SizedBox(width: 8),
-                            Text(
-                              '修改范围',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: Colors.orange.shade900,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        RadioListTile<bool>(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('仅修改今天', style: TextStyle(fontSize: 14)),
-                          subtitle: Text(
-                            '创建临时覆盖，不影响其他日期',
-                            style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                          ),
-                          value: true,
-                          groupValue: modifyOnlyToday,
-                          onChanged: (value) => setState(() => modifyOnlyToday = value!),
-                        ),
-                        RadioListTile<bool>(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('修改整个规则', style: TextStyle(fontSize: 14)),
-                          subtitle: Text(
-                            '永久修改，影响所有适用日期',
-                            style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                          ),
-                          value: false,
-                          groupValue: modifyOnlyToday,
-                          onChanged: (value) => setState(() => modifyOnlyToday = value!),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
+      builder: (context) => AlertDialog(
+        title: Text(schedule.title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.edit),
+              title: Text('编辑规则'),
+              onTap: () => Navigator.pop(context, 'editRule'),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
+            ListTile(
+              leading: Icon(Icons.event_note),
+              title: Text('管理覆盖'),
+              onTap: () => Navigator.pop(context, 'manageOverride'),
             ),
-            ElevatedButton(
-              onPressed: () async {
-                if (titleController.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('标题不能为空')),
-                  );
-                  return;
-                }
-
-                final dbService = Provider.of<DatabaseService>(context, listen: false);
-                final gptService = Provider.of<GptService>(context, listen: false);
-                
-                if (isFromRule && modifyOnlyToday) {
-                  // 仅修改今天 - 创建覆盖
-                  final ruleId = schedule.sourceTemplateId ?? await dbService.findRuleId(schedule.title, null);
-                  
-                  if (ruleId != null) {
-                    final hasChanges = titleController.text.trim() != schedule.title ||
-                                      descController.text.trim() != (schedule.description ?? '') ||
-                                      (selectedTime != null && schedule.startTime != null &&
-                                       (selectedTime!.hour != schedule.startTime!.hour ||
-                                        selectedTime!.minute != schedule.startTime!.minute));
-                    
-                    if (hasChanges) {
-                      // 使用 GptService 的 _modifyOnce 逻辑创建覆盖
-                      final data = {
-                        'title': schedule.title,
-                        'date': schedule.date.toIso8601String().split('T')[0],
-                        if (selectedTime != null && 
-                            (schedule.startTime == null ||
-                             selectedTime!.hour != schedule.startTime!.hour ||
-                             selectedTime!.minute != schedule.startTime!.minute))
-                          'new_time': '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}',
-                        if (titleController.text.trim() != schedule.title)
-                          'new_title': titleController.text.trim(),
-                      };
-                      
-                      await gptService.executeAction(PendingAction(
-                        id: DateTime.now().millisecondsSinceEpoch.toString(),
-                        type: ActionType.modifyOnce,
-                        description: '仅修改今天的日程',
-                        data: data,
-                      ).id);
-                      
-                      Navigator.pop(context);
-                      _loadSchedules();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('已创建今日覆盖')),
-                      );
-                      return;
-                    }
-                  }
-                }
-                
-                // 修改整个规则或普通日程
-                DateTime? newStartTime;
-                if (selectedTime != null) {
-                  newStartTime = DateTime(
-                    schedule.date.year,
-                    schedule.date.month,
-                    schedule.date.day,
-                    selectedTime!.hour,
-                    selectedTime!.minute,
-                  );
-                }
-
-                final updated = schedule.copyWith(
-                  title: titleController.text.trim(),
-                  description: descController.text.trim().isEmpty ? null : descController.text.trim(),
-                  startTime: newStartTime,
-                );
-
-                await dbService.updateSchedule(updated);
-                _loadSchedules();
-                Navigator.pop(context);
-                
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(isFromRule && !modifyOnlyToday ? '规则已更新' : '日程已更新')),
-                );
-              },
-              child: const Text('保存'),
+            Divider(),
+            ListTile(
+              leading: Icon(Icons.delete, color: Colors.red),
+              title: Text('删除', style: TextStyle(color: Colors.red)),
+              onTap: () => Navigator.pop(context, 'delete'),
             ),
           ],
         ),
       ),
     );
+
+    if (!mounted || action == null) return;
+
+    if (action == 'editRule') {
+      // 直接打开规则编辑对话框
+      final dbService = Provider.of<DatabaseService>(context, listen: false);
+      final rule = await dbService.getRuleById(schedule.sourceTemplateId!);
+      if (rule != null && mounted) {
+        final result = await showDialog<bool>(
+          context: context,
+          builder: (context) => RuleEditDialog(rule: rule),
+        );
+        if (result == true) {
+          _shouldScrollToCurrent = false; // 编辑规则刷新不触发滚动
+          await _loadSchedules();
+        }
+      }
+    } else if (action == 'manageOverride') {
+      // 打开覆盖管理对话框
+      final dbService = Provider.of<DatabaseService>(context, listen: false);
+      final rule = await dbService.getRuleById(schedule.sourceTemplateId!);
+      if (rule != null && mounted) {
+        await showDialog(
+          context: context,
+          builder: (context) => OverrideListDialog(rule: rule),
+        );
+        _shouldScrollToCurrent = false; // 管理覆盖刷新不触发滚动
+        await _loadSchedules();
+      }
+    } else if (action == 'delete') {
+      await _showDeleteDialog(schedule);
+    }
   }
 
   /// 显示删除确认对话框
-  void _showDeleteDialog(Schedule schedule) {
-    showDialog(
+  Future<void> _showDeleteDialog(Schedule schedule) async {
+    final deleted = await showScheduleDeleteDialog(context, schedule);
+    if (deleted == true) {
+      _shouldScrollToCurrent = false; // 删除后刷新不触发滚动
+      await _loadSchedules();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      );
+      SnackBarHelper.showMessage(context, '已删除「${schedule.title}」');
+    }
+  }
+
+  /// 显示添加日程对话框
+  Future<void> _showAddScheduleDialog() async {
+    final result = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('删除日程'),
-        content: Text('确定要删除「${schedule.title}」吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final dbService = Provider.of<DatabaseService>(context, listen: false);
-              await dbService.deleteSchedule(schedule.id);
-              _loadSchedules();
-              Navigator.pop(context);
-              
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('已删除「${schedule.title}」')),
-              );
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+      builder: (context) => const RuleEditDialog(),
     );
-  }
-
-  /// 构建审批卡片（紧凑版）
-  Widget _buildApprovalCard(PendingAction action) {
-    IconData icon;
-    Color color;
-    
-    switch (action.type) {
-      case ActionType.create:
-        icon = Icons.add_circle_outline;
-        color = Colors.green;
-        break;
-      case ActionType.modify:
-        icon = Icons.edit_outlined;
-        color = Colors.orange;
-        break;
-      case ActionType.modifyOnce:
-        icon = Icons.schedule_outlined;
-        color = Colors.purple;
-        break;
-      case ActionType.delete:
-        icon = Icons.delete_outline;
-        color = Colors.red;
-        break;
-      case ActionType.toggleComplete:
-        icon = Icons.check_circle_outline;
-        color = Colors.blue;
-        break;
-    }
-    
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        gradient: LinearGradient(
-          colors: [color.withOpacity(0.1), color.withOpacity(0.05)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, color: color, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  action.description,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: () => _rejectAction(action),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  minimumSize: const Size(0, 0),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  foregroundColor: Colors.red.shade600,
-                ),
-                child: const Text('拒绝', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: () => _approveAction(action),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  minimumSize: const Size(0, 0),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  backgroundColor: color,
-                  foregroundColor: Colors.white,
-                  elevation: 2,
-                  shadowColor: color.withOpacity(0.5),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Text('确认', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMessageBubble(ChatMessage message, int index) {
-    // 计算透明度（从 1/4 处开始渐变）
-    final totalMessages = _messages.length;
-    final fadeStartIndex = (totalMessages * 0.25).floor().clamp(1, totalMessages);
-    double opacity = 1.0;
-    
-    if (totalMessages > 1 && index < fadeStartIndex) {
-      // �?1/4 之前的消息渐变透明，最�?0.2
-      opacity = ((index + 1) / fadeStartIndex).clamp(0.2, 1.0);
-    }
-    
-    return Opacity(
-      opacity: opacity,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        child: Row(
-          mainAxisAlignment:
-              message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (!message.isUser) ...[
-              CircleAvatar(
-                radius: 12,
-                backgroundColor: message.isError 
-                    ? Colors.red.shade100 
-                    : Colors.blue.shade100,
-                child: Icon(
-                  message.isError ? Icons.error_outline : Icons.smart_toy,
-                  size: 14,
-                  color: message.isError 
-                      ? Colors.red.shade700 
-                      : Colors.blue.shade700,
-                ),
-              ),
-              const SizedBox(width: 8),
-            ],
-            Flexible(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: message.isUser
-                      ? Colors.blue.shade500
-                      : message.isError
-                          ? Colors.red.shade100
-                          : Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      message.text,
-                      style: TextStyle(
-                        color: message.isUser 
-                            ? Colors.white 
-                            : (message.isError ? Colors.red.shade900 : Colors.black87),
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _formatTime(message.timestamp),
-                      style: TextStyle(
-                        color: message.isUser ? Colors.white70 : Colors.grey.shade500,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (message.isUser) ...[
-              const SizedBox(width: 8),
-              CircleAvatar(
-                radius: 12,
-                backgroundColor: Colors.blue.shade100,
-                child: Icon(
-                  Icons.person,
-                  size: 14,
-                  color: Colors.blue.shade700,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _formatTime(DateTime time) {
-    final now = DateTime.now();
-    final diff = now.difference(time);
-
-    if (diff.inSeconds < 60) {
-      return '刚刚';
-    } else if (diff.inMinutes < 60) {
-      return '${diff.inMinutes}分钟前';
-    } else if (diff.inHours < 24 && time.day == now.day) {
-      return '${time.hour}:${time.minute.toString().padLeft(2, '0')}';
-    } else {
-      return '${time.month}/${time.day} ${time.hour}:${time.minute.toString().padLeft(2, '0')}';
+    if (result == true) {
+      _shouldScrollToCurrent = false;
+      await _loadSchedules();
     }
   }
+
+  /// 下拉刷新 - 切换到前一天
+  void _onRefresh() async {
+    HapticFeedback.mediumImpact();
+    _dateChangeDirection = -1; // 标记从前一天切换
+    _shouldScrollToCurrent = true; // 滑动切换日期需要滚动到当前
+    _changeDateByDays(-1);
+    _refreshController.refreshCompleted();
+  }
+
+  /// 上拉加载 - 切换到后一天
+  void _onLoading() async {
+    HapticFeedback.mediumImpact();
+    _dateChangeDirection = 1; // 标记从后一天切换
+    _shouldScrollToCurrent = true; // 滑动切换日期需要滚动到当前
+    _changeDateByDays(1);
+    _refreshController.loadComplete();
+  }
+
+  // Message bubble rendering moved into ChatList widget
 }
 
-/// 聊天消息模型
-class ChatMessage {
-  final String text;
-  final bool isUser;
-  final DateTime timestamp;
-  final bool isError;
-
-  ChatMessage({
-    required this.text,
-    required this.isUser,
-    required this.timestamp,
-    this.isError = false,
-  });
-
-  Map<String, dynamic> toJson() => {
-    'text': text,
-    'isUser': isUser,
-    'timestamp': timestamp.toIso8601String(),
-    'isError': isError,
-  };
-
-  factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
-    text: json['text'],
-    isUser: json['isUser'],
-    timestamp: DateTime.parse(json['timestamp']),
-    isError: json['isError'] ?? false,
-  );
-}
-
+// ChatMessage model at lib/models/chat_message.dart

@@ -1,0 +1,684 @@
+================================================================================
+MSN/Edge 主页 API 逆向分析报告
+================================================================================
+
+生成时间: 2025-12-17T17:17:06.004Z
+总请求数: 81
+总响应数: 62
+
+所有 API 端点列表:
+--------------------------------------------------------------------------------
+
+[1] https://assets.msn.cn/staticsb/statics/latest/oneTrustCN/1.1/consent/42e7c639-42ed-4e0f-936c-e7f2a5fcb01e/42e7c639-42ed-4e0f-936c-e7f2a5fcb01e.json
+    方法: GET
+    状态: 200
+    类型: application/json
+    响应数据:
+{
+  "CookieSPAEnabled": false,
+  "CookieSameSiteNoneEnabled": true,
+  "CookieV2CSPEnabled": false,
+  "MultiVariantTestingEnabled": false,
+  "UseV2": true,
+  "MobileSDK": false,
+  "SkipGeolocation": true,
+  "ScriptType": "LOCAL",
+  "Version": "202501.2.0",
+  "OptanonDataJSON": "42e7c639-42ed-4e0f-936c-e7f2a5fcb01e",
+  "GeolocationUrl": "https://geolocation.onetrust.com/cookieconsentpub/v1/geo/location",
+  "BulkDomainCheckUrl": "https://cookies-data.onetrust.io/bannersdk/v1/domaingroupcheck",
+  "R
+    ... (省略 6670 字符)
+
+
+[2] https://assets.msn.cn/resolver/api/resolve/v3/config/?expType=AppConfig&expInstance=default&apptype=homePage&v=20251216.31&targetScope={%22audienceMode%22:%22adult%22,%22browser%22:{%22browserType%22:%22chrome%22,%22version%22:%22121%22,%22ismobile%22:%22false%22},%22deviceFormFactor%22:%22desktop%22,%22domain%22:%22www.msn.cn%22,%22locale%22:{%22content%22:{%22language%22:%22zh%22,%22market%22:%22cn%22},%22display%22:{%22language%22:%22zh%22,%22market%22:%22cn%22}},%22os%22:%22windows%22,%22modes%22:{%22audienceMode%22:%22adult%22},%22platform%22:%22web%22,%22pageType%22:%22hp%22,%22pageExperiments%22:[%22prg-pr2-nohidepa%22]}
+    方法: GET
+    状态: 200
+    类型: application/json; charset=utf-8
+    响应数据:
+{
+  "configs": {
+    "AppConfig/default": {
+      "properties": {
+        "rootExperience": {
+          "configRef": {
+            "experienceType": "EntryPointHpWC",
+            "instanceSrc": "default"
+          }
+        },
+        "childExperiences": {
+          "entryPointHpWaterfall": {
+            "instanceId": "EntryPointHpWaterfall",
+            "configRef": {
+              "experienceType": "EntryPointHpWC",
+              "instanceSrc": "waterfall"
+            }
+          }
+        }
+ 
+    ... (省略 877675 字符)
+
+
+[3] https://assets.msn.cn/staticsb/statics/latest/oneTrustCN/1.1/consent/42e7c639-42ed-4e0f-936c-e7f2a5fcb01e/01909118-b776-7c3c-9eea-e72cafcecac3/zh-cn.json
+    方法: GET
+    状态: 200
+    类型: application/json
+    响应数据:
+{
+  "DomainData": {
+    "pclifeSpanYr": "年",
+    "pclifeSpanYrs": "年",
+    "pclifeSpanSecs": "几秒钟",
+    "pclifeSpanWk": "星期",
+    "pclifeSpanWks": "周",
+    "pccontinueWithoutAcceptText": "继续但不接受",
+    "pccloseButtonType": "Icon",
+    "MainText": "关于您的隐私",
+    "MainInfoText": "我们处理您的数据是为了提供内容或广告，并衡量此类内容或广告的交付情况，进而提取有关我们网站的见解。除非征得您的同意并且出于维护合法权益的目的，否则我们不会与合作伙伴分享这些信息。您可以根据以下特定目的或在每个目的下的链接中的合作伙伴级别，根据合法权益行使同意或拒绝的权力。之后，这些选择将被告知给参与透明度和同意框架的供应商。",
+    "AboutText": "更多信息",
+    "AboutCookiesText": "您的隐私",
+
+    ... (省略 295327 字符)
+
+
+[4] https://assets.msn.cn/staticsb/statics/latest/oneTrustCN/1.1/consent/42e7c639-42ed-4e0f-936c-e7f2a5fcb01e/iab2V2Data.json
+    方法: GET
+    状态: 200
+    类型: application/json
+    响应数据:
+{
+  "features": {
+    "1": {
+      "illustrations": [],
+      "name": "Match and combine data from other data sources",
+      "description": "Information about your activity on this service may be matched and combined with other information relating to you and originating from various sources (for instance your activity on a separate online service, your use of a loyalty card in-store, or your answers to a survey), in support of the purposes explained in this notice.",
+      "id": 1
+    },
+    "
+    ... (省略 1002759 字符)
+
+
+[5] https://assets.msn.cn/staticsb/statics/latest/oneTrustCN/1.1/scripttemplates/202501.2.0/assets/otFlat.json
+    方法: GET
+    状态: 200
+    类型: application/json
+    响应数据:
+{
+  "name": "otFlat",
+  "html": "PGRpdiBpZD0ib25ldHJ1c3QtYmFubmVyLXNkayIgY2xhc3M9Im90RmxhdCI+PGRpdiByb2xlPSJkaWFsb2ciPjxkaXYgY2xhc3M9Im90LXNkay1jb250YWluZXIiPjxkaXYgY2xhc3M9Im90LXNkay1yb3ciPjxkaXYgaWQ9Im9uZXRydXN0LWdyb3VwLWNvbnRhaW5lciIgY2xhc3M9Im90LXNkay1laWdodCBvdC1zZGstY29sdW1ucyI+PGRpdiBjbGFzcz0iYmFubmVyX2xvZ28iPjwvZGl2PjxkaXYgaWQ9Im9uZXRydXN0LXBvbGljeSI+PGgyIGlkPSJvbmV0cnVzdC1wb2xpY3ktdGl0bGUiPlRpdGxlPC9oMj48ZGl2IGlkPSJvbmV0cnVzdC1wb2xpY3ktdGV4dCI+dGl0bGU8YSBocmVmPSIjIj5wb2xpY3k8L2E+PC9kaXY
+    ... (省略 12987 字符)
+
+
+[6] https://assets.msn.cn/staticsb/statics/latest/oneTrustCN/1.1/scripttemplates/202501.2.0/assets/v2/otPcCenter.json
+    方法: GET
+    状态: 200
+    类型: application/json
+    响应数据:
+{
+  "name": "otPcCenter",
+  "html": "PGRpdiBpZD0ib25ldHJ1c3QtcGMtc2RrIiBjbGFzcz0ib3RQY0NlbnRlciBvdC1oaWRlIG90LWZhZGUtaW4iPjxkaXYgcm9sZT0iZGlhbG9nIiBhcmlhLW1vZGFsPSJ0cnVlIj48IS0tIENsb3NlIEJ1dHRvbiAtLT48ZGl2IGNsYXNzPSJvdC1wYy1oZWFkZXIiPjwhLS0gTG9nbyBUYWcgLS0+PGRpdiBjbGFzcz0ib3QtcGMtbG9nbyIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJDb21wYW55IExvZ28iPjwvZGl2PjxidXR0b24gaWQ9ImNsb3NlLXBjLWJ0bi1oYW5kbGVyIiBjbGFzcz0ib3QtY2xvc2UtaWNvbiIgYXJpYS1sYWJlbD0iQ2xvc2UiPjwvYnV0dG9uPjwvZGl2PjwhLS0gQ2xvc2UgQnV0dG9uIC0tPjxkaXY
+    ... (省略 63376 字符)
+
+
+[7] https://assets.msn.cn/bundles/v1/homePage/latest/libs_weather-common-utils_dist_data_FeedWeatherDataUtils_js.626d58cf7fa90534a1b1.js
+    方法: GET
+    状态: 200
+    类型: application/javascript
+
+
+[8] https://assets.msn.cn/staticsb/statics/latest/oneTrustCN/1.1/scripttemplates/202501.2.0/assets/otCommonStyles.css
+    方法: GET
+    状态: 200
+    类型: text/css
+    响应数据:
+"#onetrust-banner-sdk .onetrust-vendors-list-handler{cursor:pointer;color:#1f96db;font-size:inherit;font-weight:bold;text-decoration:none;margin-left:5px}#onetrust-banner-sdk .onetrust-vendors-list-handler:hover{color:#1f96db}#onetrust-banner-sdk:focus{outline:2px solid #000;outline-offset:-2px}#onetrust-banner-sdk a:focus{outline:2px solid #000}#onetrust-banner-sdk #onetrust-accept-btn-handler,#onetrust-banner-sdk #onetrust-reject-all-handler,#onetrust-banner-sdk #onetrust-pc-btn-handler{outlin
+    ... (省略 24402 字符)
+
+
+[9] https://browser.events.data.msn.cn/OneCollector/1.0?cors=true&content-type=application/x-json-stream&client-id=NO_AUTH&client-version=1DS-Web-JS-3.2.8&apikey=0ded60c75e44443aa3484c42c1c43fe8-9fc57d3f-fdac-4bcf-b927-75eafe60192e-7279&upload-time=1765991801390&time-delta-to-apply-millis=use-collector-delta&w=0&NoResponseBody=true
+    方法: POST
+    状态: 204
+    类型: 
+
+
+[10] https://assets.msn.cn/staticsb/statics/latest/oneTrustCN/1.1/consent/42e7c639-42ed-4e0f-936c-e7f2a5fcb01e/01909118-b776-7c3c-9eea-e72cafcecac3/logos/static/ot_guard_logo.svg
+    方法: GET
+    状态: 200
+    类型: image/svg+xml
+
+
+[11] https://assets.msn.cn/service/news/feed/pages/weblayout?User=m-1E239F5BB04B602708C8899EB1E16162&activityId=6942e576-4934-41f4-9828-d36c2c2ffd2f&adoffsets=c1:-1,c2:-1&apikey=0QfOX3Vn51YCzitbLaRkTTBadtWpgTN8NZLW0C1SEM&audienceMode=adult&cm=zh-cn&colstatus=c1:0,c2:0&column=c2&colwidth=300&contentType=article,video,slideshow,webcontent&dprValue=1&it=web&l3v=2&layout=c2&memory=8&newsSkip=0&newsTop=48&ocid=hponeservicefeed&pgc=1035&private=1&timeOut=1000&vpSize=800x600&wposchema=byregion
+    方法: GET
+    状态: 200
+    类型: application/json; charset=utf-8
+    响应数据:
+{
+  "nextPageUrl": "https://api.msn.com:443/news/feed/pages/weblayout?activityId=6942e576-4934-41f4-9828-d36c2c2ffd2f&timeOut=1000&ocid=hponeservicefeed&apikey=0QfOX3Vn51YCzitbLaRkTTBadtWpgTN8NZLW0C1SEM&contentType=article,video,slideshow,webcontent&cm=zh-cn&User=m-1E239F5BB04B602708C8899EB1E16162&newsSkip=42&audienceMode=adult&wposchema=byregion&renderedSegments=35734127906819&lastcardrank=25&adoffsets=1:1520,2:608&wpoCmsAdServed=0&wpoNativeAdServed=4&cardsServed=25&allcoloffsets=c1:0|c2:0,0|c3
+    ... (省略 589277 字符)
+
+
+[12] https://browser.events.data.msn.cn/OneCollector/1.0?cors=true&content-type=application/x-json-stream&client-id=NO_AUTH&client-version=1DS-Web-JS-3.2.8&apikey=0ded60c75e44443aa3484c42c1c43fe8-9fc57d3f-fdac-4bcf-b927-75eafe60192e-7279&upload-time=1765991803567&w=0&NoResponseBody=true
+    方法: POST
+    状态: 204
+    类型: 
+
+
+[13] https://browser.events.data.msn.cn/OneCollector/1.0?cors=true&content-type=application/x-json-stream&client-id=NO_AUTH&client-version=1DS-Web-JS-3.2.8&apikey=0ded60c75e44443aa3484c42c1c43fe8-9fc57d3f-fdac-4bcf-b927-75eafe60192e-7279&upload-time=1765991804387&w=0&NoResponseBody=true
+    方法: POST
+    状态: 204
+    类型: 
+
+
+[14] https://assets.msn.cn/bundles/v1/homePage/latest/libs_weather-common-utils_dist_data_SchemaTranslatorUtils_js-libs_weather-shared-wc_dist_type-083adb.c4dc40d2645c5d75b5ea.js
+    方法: GET
+    状态: 200
+    类型: application/javascript
+
+
+[15] https://assets.msn.cn/bundles/v1/homePage/latest/libs_weather-shared-wc_dist_utilities_entry_cardSelector_BackgroundMappingHelper_js-libs_weat-34973f.cf90795ec08b82ca4aa9.js
+    方法: GET
+    状态: 200
+    类型: application/javascript
+
+
+[16] https://assets.msn.cn/bundles/v1/homePage/latest/libs_nurturing-placement-manager_dist_Rules_PlacementInteractionLimit_js-libs_weather-shared--4c9243.bcdad8ec56718110f9af.js
+    方法: GET
+    状态: 200
+    类型: application/javascript
+
+
+[17] https://assets.msn.cn/bundles/v1/homePage/latest/weather-card-wc.76ebf5490ea6ae213073.js
+    方法: GET
+    状态: 200
+    类型: application/javascript
+
+
+[18] https://assets.msn.cn/bundles/v1/homePage/latest/libs_location-service_dist_profiles_WeatherPdpClient_js-libs_weather-common-utils_dist_data_S-a2427f.15bd9e2c5c54f2960236.js
+    方法: GET
+    状态: 200
+    类型: application/javascript
+
+
+[19] https://assets.msn.cn/bundles/v1/homePage/latest/libs_weather-card-data-connector_dist_index_js.63d89fa0298d3fd7d155.js
+    方法: GET
+    状态: 200
+    类型: application/javascript
+
+
+[20] https://srtb.msn.cn/auction
+    方法: POST
+    状态: 200
+    类型: application/json; charset=utf-8
+    响应数据:
+{
+  "placements": [
+    {
+      "auctionId": "8e9311f6-5981-4312-af3b-d6b01185d956",
+      "region": "river",
+      "index": 1,
+      "providerId": "bing",
+      "subProviderId": "naexchange",
+      "adType": "Auction",
+      "locale": "zh-cn",
+      "moduleTag": "bingsponcon",
+      "visibilityUrls": [
+        "https://www.bing.com/api/v1/mediation/tracking?adUnit=1732768568&auId=fe238b93-ee03-484e-95ee-3562f9e102a3&bdc=ch&bidId=1&bidderId=4&cmExpId=RSV&impId=8&oAdUnit=1732768568&publisherId=17
+    ... (省略 76667 字符)
+
+
+[21] https://assets.msn.cn/content/v1/cms/api/amp/Document/BBPRWnl
+    方法: GET
+    状态: 200
+    类型: application/json; charset=utf-8
+    响应数据:
+{
+  "$type": "list",
+  "title": "backfill list第四篇请放文章不然会出现Edge NTP页面混乱",
+  "_isPublishingLocked": false,
+  "_id": "BBPRWnl",
+  "_name": "Backfill List",
+  "_expirationDateTime": "2099-03-12T08:29:00Z",
+  "_lastEditedDateTime": "2025-12-12T14:33:20Z",
+  "_links": {
+    "self": [
+      {
+        "href": "cms/api/amp/list/BBPRWnl"
+      }
+    ],
+    "parent": [
+      {
+        "href": "cms/api/amp/section/BBk8rEJ"
+      }
+    ],
+    "children": [],
+    "feed": [],
+    "provider": [],
+    "reference
+    ... (省略 4083 字符)
+
+
+[22] https://assets.msn.cn/weathermapdata/1/static/weather/Icons/taskbar_v10/Condition_Card/ClearNightV3.svg
+    方法: GET
+    状态: 200
+    类型: image/svg+xml
+
+
+[23] https://browser.events.data.msn.cn/OneCollector/1.0?cors=true&content-type=application/x-json-stream&client-id=NO_AUTH&client-version=1DS-Web-JS-3.2.8&apikey=0ded60c75e44443aa3484c42c1c43fe8-9fc57d3f-fdac-4bcf-b927-75eafe60192e-7279&upload-time=1765991805642&w=0&NoResponseBody=true
+    方法: POST
+    状态: 204
+    类型: 
+
+
+[24] https://assets.msn.cn/bundles/v1/homePage/latest/experiences_weather-minimap-wc_dist_index_js.7b34897263dfdd8831ac.js
+    方法: GET
+    状态: 200
+    类型: application/javascript
+
+
+[25] https://assets.msn.cn/bundles/v1/homePage/latest/weather-minimap-wc.3764fb99a67202a283e9.js
+    方法: GET
+    状态: 200
+    类型: application/javascript
+
+
+[26] https://privacyportal.onetrust.com/request/v1/consentreceipts
+    方法: POST
+    状态: 200
+    类型: application/json
+    响应数据:
+{
+  "receipt": "eyJraWQiOiJ6c3VyMWxObkNrdzU5OEN5bU4vM0M0WjgxSmZCbnlvdGZtWDBrNG1qQ0FJK1Q4Tzl5WkN4T0VmU3ozWDE5YU12dmszQTdldWpBelF5M0NFNzJwbDBydz09IiwiYWxnIjoiSFM1MTIifQ.eyJtb2MiOiJDT09LSUUiLCJzdWIiOiJDb29raWUgVW5pcXVlIElkIiwiYXR0YWNobWVudHMiOm51bGwsIm5vdGVzIjpudWxsLCJzeW5jR3JvdXAiOm51bGwsImlzcyI6bnVsbCwiY29uc2VudFN0cmluZyI6eyJ0eXBlIjoidGNmZXUiLCJjb250ZW50IjoiQ1FjanhRQVFjanhRQUFjQUJCWkhCZkZzQVBfZ0FFTGdBQ2lRSzR0WF9HX19iWGxyOFg3M2FmdGtlWTFmOTloNzdzUXhCaGFKay00RnpKdldfSndYMzJFN05BejZ0cVlLbVJJQXUzVEJBU
+    ... (省略 13757 字符)
+
+
+[27] https://api.msn.com/news/feed/segments/trendingsearch?apikey=pWw5OmQehOA0XNfgcgrTrwEJZJJJzE83ovtTQx6JRG&market=zh-cn&fdhead=1s-ts-percent,1s-ts-pnone
+    方法: GET
+    状态: 200
+    类型: application/json; charset=utf-8
+    响应数据:
+[
+  {
+    "type": "TrendingSearchCard",
+    "data": "[{\"Query\":\"\\u732E\\u8840\\u5E74\\u9F84\\u62DF\\u5EF6\\u957F\\u81F365\\u5468\\u5C81\",\"Score\":0,\"IsAds\":false},{\"Query\":\"\\u5317\\u6781\\u6C14\\u6E29\\u518D\\u521B\\u65B0\\u9AD8!\",\"Score\":0,\"IsAds\":false},{\"Query\":\"\\u6C90\\u66E6\\u80A1\\u4EFD\\u6700\\u9AD8\\u6DA8\\u8D85750%\",\"Score\":0,\"IsAds\":false},{\"Query\":\"\\u666F\\u533A\\u5DE5\\u4EBA\\u5192\\u9669\\u4E0B\\u5D16\\u58C1\\u6361\\u624B\\u673A\",\"Score\":0,\"IsAds\":
+    ... (省略 2627 字符)
+
+
+[28] https://api.msn.com/news/feed/segments/trendingsearch?apikey=pWw5OmQehOA0XNfgcgrTrwEJZJJJzE83ovtTQx6JRG&market=zh-cn&fdhead=1s-ts-percent,1s-ts-pnone
+    方法: GET
+    状态: 200
+    类型: application/json; charset=utf-8
+    响应数据:
+[
+  {
+    "type": "TrendingSearchCard",
+    "data": "[{\"Query\":\"\\u732E\\u8840\\u5E74\\u9F84\\u62DF\\u5EF6\\u957F\\u81F365\\u5468\\u5C81\",\"Score\":0,\"IsAds\":false},{\"Query\":\"\\u5317\\u6781\\u6C14\\u6E29\\u518D\\u521B\\u65B0\\u9AD8!\",\"Score\":0,\"IsAds\":false},{\"Query\":\"\\u6C90\\u66E6\\u80A1\\u4EFD\\u6700\\u9AD8\\u6DA8\\u8D85750%\",\"Score\":0,\"IsAds\":false},{\"Query\":\"\\u666F\\u533A\\u5DE5\\u4EBA\\u5192\\u9669\\u4E0B\\u5D16\\u58C1\\u6361\\u624B\\u673A\",\"Score\":0,\"IsAds\":
+    ... (省略 2627 字符)
+
+
+[29] https://assets.msn.cn/service/msn/user?apikey=0QfOX3Vn51YCzitbLaRkTTBadtWpgTN8NZLW0C1SEM&activityId=6942e576-4934-41f4-9828-d36c2c2ffd2f&ocid=pdp-peregrine&cm=zh-cn&it=web&user=m-1E239F5BB04B602708C8899EB1E16162&scn=ANON&source=market-consolidation
+    方法: GET
+    状态: 404
+    类型: application/json; charset=utf-8
+    响应数据:
+{
+  "@odata.context": "https%3A%2F%2Fapi.msn.com%2Fmsn%2F%24metadata%23user",
+  "value": []
+}
+
+
+[30] https://assets.msn.cn/weathermapdata/1/static/background/v2.0/jpg/clear_night.jpg
+    方法: GET
+    状态: 200
+    类型: image/jpeg
+
+
+[31] https://assets.msn.cn/weathermapdata/1/static/weather/Icons/taskbar_v10/NoColor_Card/rightArrow.svg
+    方法: GET
+    状态: 200
+    类型: image/svg+xml
+
+
+[32] https://assets.msn.cn/weathermapdata/1/static/weather/Icons/taskbar_v10/Alert//Alert_DENSE%20FOG_Y.svg
+    方法: GET
+    状态: 200
+    类型: image/svg+xml
+
+
+[33] https://assets.msn.cn/weathermapdata/1/static/background/v2.0/jpg/sunny.jpg
+    方法: GET
+    状态: 200
+    类型: image/jpeg
+
+
+[34] https://assets.msn.cn/weathermapdata/1/cmasevereweathersvgimage/202512171711/105_48_7.svg
+    方法: GET
+    状态: 200
+    类型: image/svg+xml
+
+
+[35] https://assets.msn.cn/weathermapdata/1/static/minimap/wcicons/expand.svg
+    方法: GET
+    状态: 200
+    类型: image/svg+xml
+
+
+[36] https://assets.msn.cn/weathermapdata/1/cmasevereweathersvgimage/202512171711/106_49_7.svg
+    方法: GET
+    状态: 200
+    类型: image/svg+xml
+
+
+[37] https://assets.msn.cn/weathermapdata/1/static/minimap/wcicons/right_arrow.svg
+    方法: GET
+    状态: 200
+    类型: image/svg+xml
+
+
+[38] https://assets.msn.cn/weathermapdata/1/cmasevereweathersvgimage/202512171711/106_48_7.svg
+    方法: GET
+    状态: 200
+    类型: image/svg+xml
+
+
+[39] https://assets.msn.cn/weathermapdata/1/cmasevereweathersvgimage/202512171711/105_49_7.svg
+    方法: GET
+    状态: 200
+    类型: image/svg+xml
+
+
+[40] https://assets.msn.cn/service/news/feed?query=topstories&ocid=anaheim-ntp-bn&apikey=0QfOX3Vn51YCzitbLaRkTTBadtWpgTN8NZLW0C1SEM&market=zh-cn&%24top=1
+    方法: GET
+    状态: 200
+    类型: application/json; charset=utf-8
+    响应数据:
+{
+  "@odata.context": "https%3A%2F%2Fapi.msn.com%2Fnews%2F%24metadata%23feed",
+  "value": [
+    {
+      "nextPageUrl": "https://api.msn.com:443/news/feed/me?$top=1&$skip=1&$filter=_t eq 'CompositeCard'&contentType=article,video,slideshow&query=topstories&queryType=myFeed&ocid=anaheim-ntp-bn&apikey=0QfOX3Vn51YCzitbLaRkTTBadtWpgTN8NZLW0C1SEM&responseSchema=CardView&market=zh-cn&timeOut=10000&User=m-1EB2339AD6D4604C1386255FD7B76138",
+      "subCards": [
+        {
+          "id": "AA1Srd3j",
+       
+    ... (省略 3566 字符)
+
+
+[41] https://browser.events.data.msn.cn/OneCollector/1.0?cors=true&content-type=application/x-json-stream&client-id=NO_AUTH&client-version=1DS-Web-JS-3.2.8&apikey=0ded60c75e44443aa3484c42c1c43fe8-9fc57d3f-fdac-4bcf-b927-75eafe60192e-7279&upload-time=1765991807230&w=0&NoResponseBody=true
+    方法: POST
+    状态: 204
+    类型: 
+
+
+[42] https://assets.msn.cn/bundles/v1/homePage/latest/weather-card-wc-init-account-type.2e61be12b768de7a4a38.js
+    方法: GET
+    状态: 200
+    类型: application/javascript
+
+
+[43] https://arc.msn.com/v4/api/selection?nct=1&fmt=json&nocookie=0&locale=zh-cn&country=CN&muid=1E239F5BB04B602708C8899EB1E16162&ISSIGNEDIN=0&MSN_CANVAS=1&OPSYS=WIN10&ISMOBILE=0&BROWSER=2&placement=10837393&bcnt=1&asid=3b3bc285d17a4ea2e3b2c4bcf2d413ca
+    方法: GET
+    状态: 200
+    类型: application/json; charset=utf-8
+    响应数据:
+{
+  "batchrsp": {
+    "ver": "1.0",
+    "errors": [
+      {
+        "code": 2000,
+        "msg": "No ad available. No additional information"
+      }
+    ]
+  }
+}
+
+
+[44] https://browser.events.data.msn.cn/OneCollector/1.0?cors=true&content-type=application/x-json-stream&client-id=NO_AUTH&client-version=1DS-Web-JS-3.2.8&apikey=0ded60c75e44443aa3484c42c1c43fe8-9fc57d3f-fdac-4bcf-b927-75eafe60192e-7279&upload-time=1765991807861&w=0&NoResponseBody=true
+    方法: POST
+    状态: 204
+    类型: 
+
+
+[45] https://browser.events.data.msn.cn/OneCollector/1.0?cors=true&content-type=application/x-json-stream&client-id=NO_AUTH&client-version=1DS-Web-JS-3.2.8&apikey=0ded60c75e44443aa3484c42c1c43fe8-9fc57d3f-fdac-4bcf-b927-75eafe60192e-7279&upload-time=1765991808387&w=0&NoResponseBody=true
+    方法: POST
+    状态: 204
+    类型: 
+
+
+[46] https://assets.msn.cn/bundles/v1/homePage/latest/rich-calendar-card.bfcc0b279034ad916223.js
+    方法: GET
+    状态: 200
+    类型: application/javascript
+
+
+[47] https://assets.msn.cn/weathermapdata/1/static/finance/1stparty/FinanceTaskbarIcons/Finance_Stock_Increase_Decrease/Finance_stock_down_green_72x72.png
+    方法: GET
+    状态: 200
+    类型: image/png
+
+
+[48] https://assets.msn.cn/weathermapdata/1/static/finance/1stparty/FinanceTaskbarIcons/Finance_Stock_Increase_Decrease/Finance_stock_up_green_72x72.png
+    方法: GET
+    状态: 200
+    类型: image/png
+
+
+[49] https://srtb.msn.cn/auction
+    方法: POST
+    状态: 200
+    类型: application/json; charset=utf-8
+    响应数据:
+{
+  "placements": [
+    {
+      "auctionId": "6044295e-5755-4a4f-a5fa-e642d504f155",
+      "region": "river",
+      "index": 3,
+      "providerId": "bing",
+      "subProviderId": "naexchange",
+      "adType": "Auction",
+      "locale": "zh-cn",
+      "moduleTag": "bingsponcon",
+      "visibilityUrls": [
+        "https://www.bing.com/api/v1/mediation/tracking?adUnit=1732768568&auId=ba105582-7fc0-4d26-b6a3-2c8320500684&bdc=ch&bidId=1&bidderId=4&cmExpId=RSV&impId=2&oAdUnit=1732768568&publisherId=17
+    ... (省略 19061 字符)
+
+
+[50] https://assets.msn.cn/service/news/feed/pages/weblayout?$skip=1&User=m-1E239F5BB04B602708C8899EB1E16162&activityId=6942e576-4934-41f4-9828-d36c2c2ffd2f&adoffsets=c1:1520,c2:608&adsTimeout=600&alladoffsets=c1:1824|c2:1520,608|c3:304,912,3041|c4:2129,304,608,2129|c5:1825,304,1216,608,1825|&allcoloffsets=c1:0|c2:0,0|c3:0,0,0|c4:0,0,0,0|c5:0,0,0,0,0|&alltwocoffsets=c1:7601|c2:304,304|c3:1824,304,304|c4:1216,1216,1520,1520|c5:0,0,304,304,1825|&apikey=0QfOX3Vn51YCzitbLaRkTTBadtWpgTN8NZLW0C1SEM&audienceMode=adult&cardsServed=25&cm=zh-cn&colstatus=c1:0,c2:0&column=c2&colwidth=300&contentType=article,video,slideshow,webcontent&cookieWallPresent=false&dprValue=1&l3v=2&lastcardrank=25&layout=c2&memory=8&mobile=false&newsSkip=36&ocid=hponeservicefeed&private=1&renderedSegments=35734127906819&timeOut=2000&vpSize=800x600&wpoCmsAdServed=0&wpoNativeAdServed=4&wposchema=byregion
+    方法: GET
+    状态: 200
+    类型: application/json; charset=utf-8
+    响应数据:
+{
+  "nextPageUrl": "https://api.msn.com:443/news/feed/pages/weblayout?activityId=6942e576-4934-41f4-9828-d36c2c2ffd2f&timeOut=2000&ocid=hponeservicefeed&apikey=0QfOX3Vn51YCzitbLaRkTTBadtWpgTN8NZLW0C1SEM&contentType=article,video,slideshow,webcontent&mobile=false&cookieWallPresent=false&cm=zh-cn&User=m-1E239F5BB04B602708C8899EB1E16162&newsSkip=108&audienceMode=adult&wposchema=byregion&renderedSegments=35734127906819&lastcardrank=83&adoffsets=1:0,2:912&wpoCmsAdServed=0&wpoNativeAdServed=21&cardsSe
+    ... (省略 367468 字符)
+
+
+[51] https://assets.msn.cn/service/Finance/ExchangeStatistics?apikey=0QfOX3Vn51YCzitbLaRkTTBadtWpgTN8NZLW0C1SEM&activityId=6942e576-4934-41f4-9828-d36c2c2ffd2f&ocid=finance-utils-peregrine&cm=zh-cn&it=web&scn=ANON&ids=r6dwp2&wrapodata=false
+    方法: GET
+    状态: 200
+    类型: application/json; charset=utf-8
+    响应数据:
+[
+  {
+    "exchangeId": "r6dwp2",
+    "exchangeCode": "XSHG",
+    "displayName": "Shanghai Stock Exchange",
+    "localizedAttributes": {
+      "es-mx": {
+        "displayName": "Bolsa de Valores de Shanghái"
+      },
+      "en-in": {
+        "displayName": "Shanghai Stock Exchange"
+      },
+      "bn-in": {
+        "displayName": "সাংহাই স্টক এক্সচেঞ্জ"
+      },
+      "hu-hu": {
+        "displayName": "Shanghai Stock Exchange"
+      },
+      "fr-ch": {
+        "displayName": "Bourse de Shanghai"
+    ... (省略 12466 字符)
+
+
+[52] https://assets.msn.cn/service/Finance/Charts?apikey=0QfOX3Vn51YCzitbLaRkTTBadtWpgTN8NZLW0C1SEM&activityId=6942e576-4934-41f4-9828-d36c2c2ffd2f&ocid=finance-utils-peregrine&cm=zh-cn&it=web&scn=ANON&ids=adfh77,adg1m7,aopzxm,a1yv52,adg21h,b1a977&type=1D1M&wrapodata=false&chartflag=7&allowempty=true
+    方法: GET
+    状态: 200
+    类型: application/json; charset=utf-8
+    响应数据:
+[
+  [
+    {
+      "series": {
+        "prices": [
+          3824.6138,
+          3824.6138,
+          3824.6138,
+          3824.6138,
+          3824.6138,
+          3824.6138,
+          3824.6138,
+          3824.6138,
+          3824.6138,
+          3824.6138,
+          3822.5086,
+          3822.5086,
+          3822.5086,
+          3822.5086,
+          3822.5086,
+          3826.8137,
+          3826.0847,
+          3822.5878,
+          3822.0647,
+          3822.8087,
+          3821.9798,
+         
+    ... (省略 97900 字符)
+
+
+[53] https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=0
+    方法: POST
+    状态: 200
+    类型: application/json
+    响应数据:
+{
+  "acc": 4,
+  "webResult": {
+    "msfpc": "GUID=a7d8819f812e4e11860ce39346c98200&HASH=a7d8&LV=202512&V=4&LU=1765991811658",
+    "mc1": "a7d8819f812e4e11860ce39346c98200"
+  }
+}
+
+
+[54] https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=0
+    方法: POST
+    状态: 200
+    类型: application/json
+    响应数据:
+{
+  "acc": 4,
+  "webResult": {
+    "msfpc": "GUID=daf36c6430384437ae8b6f1fd0c0fd26&HASH=daf3&LV=202512&V=4&LU=1765991811658",
+    "mc1": "daf36c6430384437ae8b6f1fd0c0fd26"
+  }
+}
+
+
+[55] https://srtb.msn.cn/auction
+    方法: POST
+    状态: 200
+    类型: application/json; charset=utf-8
+    响应数据:
+{
+  "placements": [
+    {
+      "auctionId": "e450b0be-2ed5-49ba-aa63-c92375a2989f",
+      "region": "river",
+      "index": 4,
+      "providerId": "bing",
+      "subProviderId": "naexchange",
+      "adType": "Auction",
+      "locale": "zh-cn",
+      "moduleTag": "bingsponcon",
+      "visibilityUrls": [
+        "https://www.bing.com/api/v1/mediation/tracking?adUnit=1732768568&auId=e7703c6b-b0c3-4b86-b6a4-aa62a8d47633&bdc=ch&bidId=1&bidderId=4&cmExpId=LV1&impId=1&oAdUnit=1732768568&publisherId=17
+    ... (省略 9188 字符)
+
+
+[56] https://assets.msn.cn/staticsb/statics/latest/richcalendar/img/arrow/White.svg
+    方法: GET
+    状态: 200
+    类型: image/svg+xml
+
+
+[57] https://assets.msn.cn/staticsb/statics/latest/richcalendar/background/Default_Light.svg
+    方法: GET
+    状态: 200
+    类型: image/svg+xml
+
+
+[58] https://srtb.msn.cn/auction
+    方法: POST
+    状态: 200
+    类型: application/json; charset=utf-8
+    响应数据:
+{
+  "placements": [
+    {
+      "auctionId": "6dc0ae6c-1a32-4b42-830a-b3b55d388229",
+      "region": "river",
+      "index": 5,
+      "providerId": "bing",
+      "subProviderId": "naexchange",
+      "adType": "Auction",
+      "locale": "zh-cn",
+      "moduleTag": "bingsponcon",
+      "visibilityUrls": [
+        "https://www.bing.com/api/v1/mediation/tracking?adUnit=1732768568&auId=c96d8481-d2ee-4d32-ba84-16819843ede2&bdc=ch&bidId=2&bidderId=4&cmExpId=RSV&impId=1&oAdUnit=1732768568&publisherId=17
+    ... (省略 28504 字符)
+
+
+[59] https://browser.events.data.msn.cn/OneCollector/1.0?cors=true&content-type=application/x-json-stream&client-id=NO_AUTH&client-version=1DS-Web-JS-3.2.8&apikey=0ded60c75e44443aa3484c42c1c43fe8-9fc57d3f-fdac-4bcf-b927-75eafe60192e-7279&upload-time=1765991817198&ext.intweb.msfpc=GUID%3Ddaf36c6430384437ae8b6f1fd0c0fd26%26HASH%3Ddaf3%26LV%3D202512%26V%3D4%26LU%3D1765991811658&w=0&NoResponseBody=true
+    方法: POST
+    状态: 204
+    类型: 
+
+
+[60] https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&ext.intweb.msfpc=GUID%3Ddaf36c6430384437ae8b6f1fd0c0fd26%26HASH%3Ddaf3%26LV%3D202512%26V%3D4%26LU%3D1765991811658&w=0
+    方法: POST
+    状态: 200
+    类型: application/json
+    响应数据:
+{
+  "acc": 8,
+  "webResult": {}
+}
+
+
+[61] https://browser.events.data.msn.cn/OneCollector/1.0?cors=true&content-type=application/x-json-stream&client-id=NO_AUTH&client-version=1DS-Web-JS-3.2.8&apikey=0ded60c75e44443aa3484c42c1c43fe8-9fc57d3f-fdac-4bcf-b927-75eafe60192e-7279&upload-time=1765991824021&ext.intweb.msfpc=GUID%3Ddaf36c6430384437ae8b6f1fd0c0fd26%26HASH%3Ddaf3%26LV%3D202512%26V%3D4%26LU%3D1765991811658&w=0&NoResponseBody=true
+    方法: POST
+    状态: 204
+    类型: 
+
+
+[62] https://srtb.msn.cn/auction
+    方法: POST
+    状态: 200
+    类型: application/json; charset=utf-8
+    响应数据:
+{
+  "placements": [
+    {
+      "auctionId": "7672a7e5-dc3a-4ab0-841c-3705aaadf525",
+      "region": "river",
+      "index": 9,
+      "providerId": "bing",
+      "subProviderId": "naexchange",
+      "adType": "Auction",
+      "locale": "zh-cn",
+      "moduleTag": "bingsponcon",
+      "visibilityUrls": [
+        "https://www.bing.com/api/v1/mediation/tracking?adUnit=1732768568&auId=ec2ff84e-7570-4856-bd63-b77ee5930dc0&bdc=ch&bidId=1&bidderId=4&cmExpId=RSV&impId=2&oAdUnit=1732768568&publisherId=17
+    ... (省略 28630 字符)
+

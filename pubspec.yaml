@@ -46,18 +46,29 @@ dependencies:
   
   # 数据持久化
   sqflite_common_ffi: ^2.4.0
+  sqflite: ^2.2.8
   path_provider: ^2.1.5
   path: ^1.9.1
   shared_preferences: ^2.3.5
-  
-  # 文件选择
-  file_picker: ^8.1.6
-  
+
   # 网络请求
   http: ^1.6.0
   
+  # Markdown渲染
+  flutter_markdown: ^0.7.4+1
+  
+  # 下拉刷新
+  pull_to_refresh: ^2.0.0
+  
   # 工具库
   uuid: ^4.5.2
+  
+  # 通知
+  flutter_local_notifications: ^18.0.1
+
+  # 位置与天文计算（暂时移除，使用默认值）
+  # geolocator: ^10.1.0
+  # sunrise_sunset_calc: ^3.0.0
 
 dev_dependencies:
   flutter_test:
@@ -69,6 +80,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -80,6 +92,19 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/icons/app_icon.svg
+    - assets/cities.json
+
+# Configuration for flutter_launcher_icons (自动生成并覆盖 Android/iOS 启动图标)
+# 使用新键 `flutter_launcher_icons`，旧键 `flutter_icons` 已被弃用
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icons/app_icon.png"
+  adaptive_icon_background: "#1A7EDB"
+  adaptive_icon_foreground: "assets/icons/app_icon.png"
 
   # To add assets to your application, add an assets section, like this:
   # assets:
@@ -111,3 +136,7 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+dependency_overrides:
+  # 临时覆盖以兼容社区 SDK（可在确认 SDK 版本后移除）
+  path_provider: ^2.1.5

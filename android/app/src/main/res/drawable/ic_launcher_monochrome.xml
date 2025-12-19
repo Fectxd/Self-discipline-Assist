@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 单色版本图标 - 用于Android 13+主题图标 -->
+    <group
+        android:scaleX="1.2"
+        android:scaleY="1.2"
+        android:translateX="54"
+        android:translateY="54">
+
+        <!-- 时钟外圈 -->
+        <path
+            android:fillColor="#000000"
+            android:pathData="M0,0m-20,0a20,20 0,1,1 40,0a20,20 0,1,1 -40,0"
+            android:strokeColor="#000000"
+            android:strokeWidth="2"/>
+
+        <!-- 时钟刻度 -->
+        <path
+            android:fillColor="#000000"
+            android:pathData="M0,-16 L0,-14 M16,0 L14,0 M0,16 L0,14 M-16,0 L-14,0"/>
+
+        <!-- 时钟指针 -->
+        <path
+            android:strokeColor="#000000"
+            android:strokeWidth="2"
+            android:strokeLineCap="round"
+            android:pathData="M0,0 L0,-12 M0,0 L8,0"/>
+
+        <!-- 中心点 -->
+        <path
+            android:fillColor="#000000"
+            android:pathData="M0,0m-1.5,0a1.5,1.5 0,1,1 3,0a1.5,1.5 0,1,1 -3,0"/>
+
+        <!-- 勾选标记 -->
+        <path
+            android:strokeColor="#000000"
+            android:strokeWidth="2.5"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:pathData="M10,14 l2,2 l4,-4"/>
+    </group>
+</vector>

@@ -1,0 +1,11 @@
+# Google Gemini API SDK（官方接口使用）
+google-genai>=0.2.0
+
+# OpenAI SDK（兼容接口使用）
+openai>=1.0.0
+
+# 日期时间处理
+python-dateutil>=2.8.0
+
+# 可选：日志美化
+colorama>=0.4.6

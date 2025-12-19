@@ -1,0 +1,51 @@
+===== 简化后的状态管理使用方法 =====
+
+核心原则：让 Service 自动处理刷新，UI 只负责监听和显示
+
+1. 位置改变 → 天气自动刷新
+   ✅ 已完成！schedule_header.dart 使用 Consumer2 监听
+   - LocationService 变化时自动调用 _loadWeatherForCurrentCity()
+   - 不需要手动刷新
+
+2. 日程修改 → 列表自动刷新
+   方案A: 使用 ScheduleDataService（推荐）
+   - 所有日程操作通过 service 进行
+   - Service 自动 notifyListeners()
+   - UI 用 Consumer 监听
+   
+   方案B: 保持现状，手动调用 _loadSchedules()
+   - 适合已有复杂逻辑的情况
+
+3. 设置改变 → 对应界面自动刷新
+   ✅ 已完成！
+   - SettingsService.setShowNestedSchedules() 自动 notifyListeners()
+   - LocationService.setManualCity() 自动 notifyListeners()
+   - UI 用 Consumer 监听，自动刷新
+
+===== 关键代码模式 =====
+
+// Service 层（一次性写好）
+class XxxService extends ChangeNotifier {
+  Future<void> doSomething() async {
+    // 执行操作
+    await _database.update(...);
+    // 自动通知
+    notifyListeners();
+  }
+}
+
+// UI 层（简单使用）
+Consumer<XxxService>(
+  builder: (context, service, _) {
+    return Widget(...);
+  },
+)
+
+===== 你现在的状态 =====
+
+✅ 位置设置 - 已优化
+✅ 显示设置 - 已优化  
+✅ 天气刷新 - 已优化（位置变化自动刷新）
+⏸️ 日程刷新 - 可选优化（建议保持现状）
+
+总结：主要的联动问题已解决，不需要担心！

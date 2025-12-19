@@ -1,0 +1,42 @@
+<svg width="300" height="146" viewBox="0 0 300 146" fill="none" xmlns="http://www.w3.org/2000/svg">
+<mask id="mask0_1316_106810" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="300" height="104">
+<rect width="300" height="104" fill="url(#paint0_linear_1316_106810)"/>
+</mask>
+<g mask="url(#mask0_1316_106810)">
+<rect width="300" height="104" fill="#00C8BC" fill-opacity="0.02"/>
+<g filter="url(#filter0_f_1316_106810)">
+<ellipse cx="120.839" cy="80.0888" rx="120.839" ry="80.0888" transform="matrix(0.811314 -0.584611 0.419849 0.907594 222.114 84.4451)" fill="url(#paint1_linear_1316_106810)"/>
+</g>
+<g filter="url(#filter1_f_1316_106810)">
+<ellipse cx="197.538" cy="2.50075" rx="74.1341" ry="57.5152" fill="#49C200" fill-opacity="0.1"/>
+</g>
+<g filter="url(#filter2_f_1316_106810)">
+<ellipse cx="90.2952" cy="118.781" rx="74.1341" ry="57.5152" fill="#75ACFF" fill-opacity="0.05"/>
+</g>
+</g>
+<defs>
+<filter id="filter0_f_1316_106810" x="190.105" y="-74.8716" width="327.345" height="322.722" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+<feGaussianBlur stdDeviation="30" result="effect1_foregroundBlur_1316_106810"/>
+</filter>
+<filter id="filter1_f_1316_106810" x="63.4043" y="-115.014" width="268.268" height="235.03" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+<feGaussianBlur stdDeviation="30" result="effect1_foregroundBlur_1316_106810"/>
+</filter>
+<filter id="filter2_f_1316_106810" x="-18.8389" y="26.2661" width="218.268" height="185.03" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+<feGaussianBlur stdDeviation="17.5" result="effect1_foregroundBlur_1316_106810"/>
+</filter>
+<linearGradient id="paint0_linear_1316_106810" x1="150" y1="48" x2="150" y2="104" gradientUnits="userSpaceOnUse">
+<stop/>
+<stop offset="1" stop-opacity="0"/>
+</linearGradient>
+<linearGradient id="paint1_linear_1316_106810" x1="71.6749" y1="37.6909" x2="219.204" y2="193.739" gradientUnits="userSpaceOnUse">
+<stop stop-color="#00C8BC" stop-opacity="0.3"/>
+<stop offset="1" stop-color="#75ACFF" stop-opacity="0"/>
+</linearGradient>
+</defs>
+</svg>

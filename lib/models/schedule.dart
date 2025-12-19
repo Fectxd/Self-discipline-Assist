@@ -1,7 +1,7 @@
 import 'package:uuid/uuid.dart';
-import 'schedule_priority.dart';
 
-/// 日程模型
+/// 日程视图对象（用于前端显示）
+/// 从 ScheduleRule + ScheduleOverride 动态生成，不直接存储
 class Schedule {
   final String id;
   final String title;
@@ -10,22 +10,13 @@ class Schedule {
   final DateTime? startTime;
   final DateTime? endTime;
   final bool isCompleted;
-  
-  /// 日程优先级（用于覆盖逻辑）
-  final SchedulePriority priority;
-  
-  /// 模板类型（如果是从模板生成的）
-  final TemplateType templateType;
-  
-  /// 重复周期
-  final RecurrencePattern recurrence;
-  
+
   /// 源模板ID（如果是从模板生成的）
   final String? sourceTemplateId;
-  
+
   /// 是否允许被模板覆盖
   final bool allowOverride;
-  
+
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -37,9 +28,6 @@ class Schedule {
     this.startTime,
     this.endTime,
     this.isCompleted = false,
-    this.priority = SchedulePriority.daily,
-    this.templateType = TemplateType.none,
-    this.recurrence = RecurrencePattern.none,
     this.sourceTemplateId,
     this.allowOverride = true,
     DateTime? createdAt,
@@ -62,9 +50,6 @@ class Schedule {
           ? DateTime.parse(map['end_time'] as String)
           : null,
       isCompleted: (map['is_completed'] as int) == 1,
-      priority: SchedulePriority.fromValue(map['priority'] as int? ?? 1),
-      templateType: TemplateType.fromString(map['template_type'] as String? ?? 'none'),
-      recurrence: RecurrencePattern.fromString(map['recurrence'] as String? ?? 'none'),
       sourceTemplateId: map['source_template_id'] as String?,
       allowOverride: (map['allow_override'] as int? ?? 1) == 1,
       createdAt: DateTime.parse(map['created_at'] as String),
@@ -82,9 +67,6 @@ class Schedule {
       'start_time': startTime?.toIso8601String(),
       'end_time': endTime?.toIso8601String(),
       'is_completed': isCompleted ? 1 : 0,
-      'priority': priority.value,
-      'template_type': templateType.value,
-      'recurrence': recurrence.value,
       'source_template_id': sourceTemplateId,
       'allow_override': allowOverride ? 1 : 0,
       'created_at': createdAt.toIso8601String(),
@@ -100,9 +82,6 @@ class Schedule {
     DateTime? startTime,
     DateTime? endTime,
     bool? isCompleted,
-    SchedulePriority? priority,
-    TemplateType? templateType,
-    RecurrencePattern? recurrence,
     String? sourceTemplateId,
     bool? allowOverride,
   }) {
@@ -114,9 +93,6 @@ class Schedule {
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
       isCompleted: isCompleted ?? this.isCompleted,
-      priority: priority ?? this.priority,
-      templateType: templateType ?? this.templateType,
-      recurrence: recurrence ?? this.recurrence,
       sourceTemplateId: sourceTemplateId ?? this.sourceTemplateId,
       allowOverride: allowOverride ?? this.allowOverride,
       createdAt: createdAt,

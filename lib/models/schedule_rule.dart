@@ -1,6 +1,5 @@
 import 'package:uuid/uuid.dart';
-import 'dart:convert';
-import 'schedule_priority.dart';
+import '../utils/schedule_rule_converter.dart';
 
 /// 日程规则模型 - 核心存储单元
 /// 存储的是"规则"而非具体日程实例
@@ -8,16 +7,10 @@ class ScheduleRule {
   final String id;
   final String title;
   final String? description;
-  final String? time; // 格式: "HH:mm"
-  
-  /// 优先级层级
-  /// 1: 每日日程（最低）
-  /// 2: 工作日/休息日模板
-  /// 3: 特定星期某天（周一到周日）
-  /// 4: 特殊日程（最高，指定具体日期）
-  final SchedulePriority priority;
-  
-  /// 应用条件
+  final String? time; // 格式: "HH:mm"，开始时间
+  final String? endTime; // 格式: "HH:mm"，结束时间（可选）
+
+  /// 应用条件（类型即分类）
   final RuleCondition condition;
   
   /// 创建时间（用于"从X日期开始"的判断）
@@ -32,7 +25,7 @@ class ScheduleRule {
     required this.title,
     this.description,
     this.time,
-    required this.priority,
+    this.endTime,
     required this.condition,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -47,7 +40,25 @@ class ScheduleRule {
   /// [isHoliday] 是否为节假日
   bool appliesTo(DateTime date, {required bool isWorkday, required bool isHoliday}) {
     if (!isEnabled) return false;
-    
+
+    final targetDate = DateTime(date.year, date.month, date.day);
+
+    // 🔥 新增: 检查结束日期限制
+    if (condition.endDate != null) {
+      final endDate = DateTime(
+        condition.endDate!.year,
+        condition.endDate!.month,
+        condition.endDate!.day,
+      );
+      if (targetDate.isAfter(endDate)) return false;
+    }
+
+    // 🔥 新增: 检查最大次数限制
+    if (condition.maxCount != null && condition.maxCount! > 0) {
+      final occurrenceCount = _countOccurrencesUpTo(targetDate, isWorkday: isWorkday, isHoliday: isHoliday);
+      if (occurrenceCount > condition.maxCount!) return false;
+    }
+
     final isWeekend = date.weekday >= 6; // 周六日
     
     switch (condition.type) {
@@ -105,55 +116,125 @@ class ScheduleRule {
     }
   }
 
+  /// 计算从起始日期到目标日期的事件发生次数（用于 maxCount 限制）
+  int _countOccurrencesUpTo(DateTime targetDate, {required bool isWorkday, required bool isHoliday}) {
+    final start = condition.startDate ?? createdAt;
+    final startDate = DateTime(start.year, start.month, start.day);
+    final target = DateTime(targetDate.year, targetDate.month, targetDate.day);
+
+    // 如果目标日期早于起始日期，返回 0
+    if (target.isBefore(startDate)) return 0;
+
+    int count = 0;
+
+    switch (condition.type) {
+      case ConditionType.daily:
+        // 每天：计算天数差 + 1
+        count = target.difference(startDate).inDays + 1;
+        break;
+
+      case ConditionType.interval:
+        // 每隔N天：计算符合间隔的天数
+        if (condition.intervalDays != null && condition.intervalDays! > 0) {
+          final daysDiff = target.difference(startDate).inDays;
+          count = (daysDiff / condition.intervalDays!).floor() + 1;
+        }
+        break;
+
+      case ConditionType.weekday:
+        // 特定星期几：逐天扫描计数
+        DateTime current = startDate;
+        while (!current.isAfter(target)) {
+          if (current.weekday == condition.weekday) {
+            count++;
+          }
+          current = current.add(const Duration(days: 1));
+        }
+        break;
+
+      case ConditionType.workday:
+        // 工作日：逐天扫描计数（需要节假日信息）
+        // 注意：这里简化处理，实际应该查询节假日数据库
+        DateTime current = startDate;
+        while (!current.isAfter(target)) {
+          final isWeekend = current.weekday >= 6;
+          // 简化：假设周末不是工作日，节假日信息需要实时查询
+          if (!isWeekend) {
+            count++;
+          }
+          current = current.add(const Duration(days: 1));
+        }
+        break;
+
+      case ConditionType.restday:
+        // 休息日：逐天扫描计数
+        DateTime current = startDate;
+        while (!current.isAfter(target)) {
+          final isWeekend = current.weekday >= 6;
+          if (isWeekend) {
+            count++;
+          }
+          current = current.add(const Duration(days: 1));
+        }
+        break;
+
+      case ConditionType.weekend:
+        // 周末：逐天扫描计数
+        DateTime current = startDate;
+        while (!current.isAfter(target)) {
+          if (current.weekday >= 6) {
+            count++;
+          }
+          current = current.add(const Duration(days: 1));
+        }
+        break;
+
+      case ConditionType.holiday:
+        // 节假日：需要查询节假日数据库，这里返回简化值
+        count = 1;
+        break;
+
+      case ConditionType.specificDate:
+        // 特定日期：只有1次
+        count = 1;
+        break;
+    }
+
+    return count;
+  }
+
   /// 从数据库 Map 创建对象
   factory ScheduleRule.fromMap(Map<String, dynamic> map) {
-    // condition 以 JSON 字符串形式存储
-    final conditionJson = jsonDecode(map['condition'] as String) as Map<String, dynamic>;
-    
-    return ScheduleRule(
-      id: map['id'] as String,
-      title: map['title'] as String,
-      description: map['description'] as String?,
-      time: map['time'] as String?,
-      priority: SchedulePriority.fromValue(map['priority'] as int),
-      condition: RuleCondition.fromMap(conditionJson),
-      createdAt: DateTime.parse(map['created_at'] as String),
-      updatedAt: DateTime.parse(map['updated_at'] as String),
-      isEnabled: (map['is_enabled'] as int? ?? 1) == 1,
-    );
+    return ScheduleRuleConverter.fromDatabaseMap(map);
   }
 
   /// 转换为数据库 Map
   Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'title': title,
-      'description': description,
-      'time': time,
-      'priority': priority.value,
-      'condition': jsonEncode(condition.toMap()), // JSON序列化
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
-      'is_enabled': isEnabled ? 1 : 0,
-    };
+    return ScheduleRuleConverter.toDatabaseMap(this);
   }
 }
 
 /// 规则应用条件
 class RuleCondition {
   final ConditionType type;
-  
+
   /// 当 type = weekday 时使用 (1=周一, 7=周日)
   final int? weekday;
-  
+
   /// 当 type = specificDate 时使用
   final DateTime? specificDate;
-  
+
   /// 当 type = interval 时使用：间隔天数
   final int? intervalDays;
-  
+
   /// 当 type = interval 时使用：起始日期
   final DateTime? startDate;
+
+  /// 结束日期（时间范围限制）- 对应 RRULE 的 UNTIL
+  final DateTime? endDate;
+
+  /// 最大重复次数（时间范围限制）- 对应 RRULE 的 COUNT
+  final int? maxCount;
 
   const RuleCondition({
     required this.type,
@@ -161,29 +242,64 @@ class RuleCondition {
     this.specificDate,
     this.intervalDays,
     this.startDate,
+    this.endDate,
+    this.maxCount,
   });
 
-  factory RuleCondition.daily() => const RuleCondition(type: ConditionType.daily);
-  
-  factory RuleCondition.restday() => const RuleCondition(type: ConditionType.restday);
-  
-  factory RuleCondition.workday() => const RuleCondition(type: ConditionType.workday);
-  
-  factory RuleCondition.interval(int days, DateTime start) => RuleCondition(
+  factory RuleCondition.daily({DateTime? endDate, int? maxCount}) => RuleCondition(
+    type: ConditionType.daily,
+    endDate: endDate,
+    maxCount: maxCount,
+  );
+
+  factory RuleCondition.restday({DateTime? endDate, int? maxCount}) => RuleCondition(
+    type: ConditionType.restday,
+    endDate: endDate,
+    maxCount: maxCount,
+  );
+
+  factory RuleCondition.workday({DateTime? endDate, int? maxCount}) => RuleCondition(
+    type: ConditionType.workday,
+    endDate: endDate,
+    maxCount: maxCount,
+  );
+
+  factory RuleCondition.interval(
+    int days,
+    DateTime start, {
+    DateTime? end,
+    int? maxCount,
+  }) => RuleCondition(
     type: ConditionType.interval,
     intervalDays: days,
     startDate: start,
+    endDate: end,
+    maxCount: maxCount,
   );
-  
-  factory RuleCondition.weekend() => const RuleCondition(type: ConditionType.weekend);
-  
-  factory RuleCondition.holiday() => const RuleCondition(type: ConditionType.holiday);
-  
-  factory RuleCondition.weekday(int weekday) => RuleCondition(
+
+  factory RuleCondition.weekend({DateTime? endDate, int? maxCount}) => RuleCondition(
+    type: ConditionType.weekend,
+    endDate: endDate,
+    maxCount: maxCount,
+  );
+
+  factory RuleCondition.holiday({DateTime? endDate, int? maxCount}) => RuleCondition(
+    type: ConditionType.holiday,
+    endDate: endDate,
+    maxCount: maxCount,
+  );
+
+  factory RuleCondition.weekday(
+    int weekday, {
+    DateTime? endDate,
+    int? maxCount,
+  }) => RuleCondition(
     type: ConditionType.weekday,
     weekday: weekday,
+    endDate: endDate,
+    maxCount: maxCount,
   );
-  
+
   factory RuleCondition.specificDate(DateTime date) => RuleCondition(
     type: ConditionType.specificDate,
     specificDate: date,
@@ -194,17 +310,21 @@ class RuleCondition {
       (t) => t.name == map['type'],
       orElse: () => ConditionType.daily,
     );
-    
+
     return RuleCondition(
       type: type,
       weekday: map['weekday'] as int?,
-      specificDate: map['specific_date'] != null 
+      specificDate: map['specific_date'] != null
           ? DateTime.parse(map['specific_date'] as String)
           : null,
       intervalDays: map['interval_days'] as int?,
       startDate: map['start_date'] != null
           ? DateTime.parse(map['start_date'] as String)
           : null,
+      endDate: map['end_date'] != null
+          ? DateTime.parse(map['end_date'] as String)
+          : null,
+      maxCount: map['max_count'] as int?,
     );
   }
 
@@ -215,33 +335,35 @@ class RuleCondition {
       'specific_date': specificDate?.toIso8601String(),
       'interval_days': intervalDays,
       'start_date': startDate?.toIso8601String(),
+      'end_date': endDate?.toIso8601String(),
+      'max_count': maxCount,
     };
   }
 }
 
-/// 条件类型枚举
+/// 条件类型枚举（日程模式分类）
 enum ConditionType {
-  /// 每天 - Priority 1
+  /// 每天
   daily,
-  
-  /// 休息日（周末+节假日） - Priority 2
+
+  /// 休息日（周末+节假日）
   restday,
-  
-  /// 工作日 - Priority 3
+
+  /// 工作日
   workday,
-  
-  /// 每隔N天 - Priority 4
+
+  /// 每隔N天
   interval,
-  
-  /// 周末（周六日） - Priority 5
+
+  /// 周末（周六日）
   weekend,
-  
-  /// 节假日 - Priority 6
+
+  /// 节假日
   holiday,
-  
-  /// 特定星期几（周一到周日） - Priority 7
+
+  /// 特定星期几（周一到周日）
   weekday,
-  
-  /// 特定日期 - Priority 8
+
+  /// 特定日期
   specificDate,
 }
