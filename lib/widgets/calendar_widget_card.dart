@@ -61,10 +61,12 @@ class _CalendarWidgetCardState extends State<CalendarWidgetCard>
       );
     }
 
+    final date = widget.calendarData!['date'] as Map<String, dynamic>?;
     final lunar = widget.calendarData!['lunar'] as Map<String, dynamic>?;
     final ganZhi = widget.calendarData!['ganZhi'] as Map<String, dynamic>?;
     final zodiac = widget.calendarData!['zodiac'];
     final constellation = widget.calendarData!['constellation'];
+    final festivals = widget.calendarData!['festivals'] as List?;
     final suitable = widget.calendarData!['suitable'] as List?;
     final unsuitable = widget.calendarData!['unsuitable'] as List?;
     final dailyQuote =
@@ -72,9 +74,33 @@ class _CalendarWidgetCardState extends State<CalendarWidgetCard>
     final progressBar =
         widget.calendarData!['progressBar'] as Map<String, dynamic>?;
 
-    // 获取当前日期
-    final now = DateTime.now();
-    final dateStr = '${now.month}月${now.day}号';
+    // 构建农历显示文本
+    String lunarText = '';
+    if (lunar != null) {
+      final month = lunar['month'] ?? '';
+      final day = lunar['day'] ?? '';
+      final alias = lunar['alias'] ?? '';
+      final combined = '$month$day';
+
+      // 如果组合后的文本已包含alias，就不显示括号
+      if (alias.isNotEmpty && !combined.contains(alias)) {
+        lunarText = '$combined（$alias）';
+      } else {
+        lunarText = combined;
+      }
+    }
+
+    // 获取公历日期（从API返回的数据）
+    String dateStr = '';
+    if (date != null) {
+      final month = date['month'] ?? 0;
+      final day = date['day'] ?? 0;
+      dateStr = '$month月$day号';
+    } else {
+      // 兜底：使用系统时间
+      final now = DateTime.now();
+      dateStr = '${now.month}月${now.day}号';
+    }
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
@@ -124,18 +150,22 @@ class _CalendarWidgetCardState extends State<CalendarWidgetCard>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // 农历和干支信息
-                if (lunar != null)
+                if (lunarText.isNotEmpty)
                   Wrap(
                     spacing: 8,
                     runSpacing: 4,
                     children: [
                       _buildInfoTag(
                         '农历',
-                        '${lunar['month']}月${lunar['day']} (${lunar['alias']})',
+                        lunarText,
                         Colors.purple,
                       ),
                       if (ganZhi != null)
-                        _buildInfoTag('干支', '${ganZhi['year']}年', Colors.brown),
+                        _buildInfoTag(
+                          '干支',
+                          '${ganZhi['year']}年 ${ganZhi['month']}月${ganZhi['day']}日',
+                          Colors.brown,
+                        ),
                       if (zodiac != null)
                         _buildInfoTag('生肖', zodiac, Colors.orange),
                       if (constellation != null)
@@ -144,6 +174,59 @@ class _CalendarWidgetCardState extends State<CalendarWidgetCard>
                   ),
 
                 const SizedBox(height: 12),
+
+                // 节日信息
+                if (festivals != null && festivals.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: festivals.map((festival) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.deepOrange.shade400,
+                                Colors.orange.shade400,
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.orange.withValues(alpha: 0.3),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.celebration,
+                                size: 14,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                festival.toString(),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
 
                 // 宜忌
                 if (suitable != null && suitable.isNotEmpty)
@@ -256,7 +339,7 @@ class _CalendarWidgetCardState extends State<CalendarWidgetCard>
                                 color: Theme.of(context)
                                     .colorScheme
                                     .onSecondaryContainer
-                                    .withOpacity(0.7),
+                                    .withValues(alpha: 0.7),
                               ),
                             ),
                           ),
@@ -318,9 +401,9 @@ class _CalendarWidgetCardState extends State<CalendarWidgetCard>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(
         '$label: $value',

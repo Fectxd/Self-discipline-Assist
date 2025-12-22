@@ -275,6 +275,13 @@ class MsnService extends ChangeNotifier {
       final calendarData = jsonDecode(calendarCard['data']);
       final today = calendarData['TodayInfo'];
 
+      // 调试：打印原始数据
+      debugPrint('📅 农历原始数据:');
+      debugPrint('  LunarMonth: ${today['DateTag']['LunarMonth']}');
+      debugPrint('  LunarDay: ${today['DateTag']['LunarDay']}');
+      debugPrint('  Alias: ${today['Alias']}');
+      debugPrint('  FestivalNames: ${today['FestivalNames']}');
+
       return {
         'date': {
           'year': today['Date']['Year'],

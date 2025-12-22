@@ -13,6 +13,7 @@ import '../services/work_schedule_service.dart';
 import '../services/msn_service.dart';
 import '../services/dashboard_widget_service.dart';
 import '../services/holiday_service.dart';
+import '../services/date_change_service.dart';
 import '../widgets/weather_widget_card.dart';
 import '../widgets/calendar_widget_card.dart';
 import 'settings_screen.dart';
@@ -31,13 +32,10 @@ class _CalendarScreenState extends State<CalendarScreen>
     with WidgetsBindingObserver {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
-  Timer? _dateCheckTimer;
-  String _currentDate = '';
 
   @override
   void initState() {
     super.initState();
-    _currentDate = _formatDate(DateTime.now());
     _selectedDay = _focusedDay;
 
     // 监听应用生命周期，前台时刷新
@@ -49,31 +47,29 @@ class _CalendarScreenState extends State<CalendarScreen>
     });
     _loadDayTypes();
 
-    // 启动定时检查（每分钟检查一次日期变更）
-    _startDateCheckTimer();
+    // 监听日期变更服务
+    DateChangeService().addListener(_onDateChanged);
   }
 
   @override
   void dispose() {
-    _dateCheckTimer?.cancel();
+    DateChangeService().removeListener(_onDateChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
-  void _startDateCheckTimer() {
-    _dateCheckTimer?.cancel();
-    _dateCheckTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
-      final newDate = _formatDate(DateTime.now());
-      if (_currentDate != newDate) {
-        debugPrint('🔄 日历页检测到日期变更: $_currentDate -> $newDate，刷新数据');
-        _currentDate = newDate;
-        _refreshMsnDataOnResume();
-      }
-    });
-  }
+  /// 日期变更回调
+  void _onDateChanged() {
+    debugPrint('🔄 日历页收到日期变更通知，刷新数据和日历状态');
 
-  String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    // 更新日历的焦点日期和选中日期为当前日期
+    setState(() {
+      _focusedDay = DateTime.now();
+      _selectedDay = DateTime.now();
+    });
+
+    _refreshMsnDataOnResume();
+    _loadDayTypes();
   }
 
   @override

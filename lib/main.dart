@@ -18,6 +18,7 @@ import 'services/settings_service.dart' as settings;
 import 'services/schedule_data_service.dart';
 import 'services/memory_service.dart';
 import 'services/import_export_service.dart';
+import 'services/date_change_service.dart';
 import 'screens/schedule_screen.dart';
 import 'screens/calendar_screen.dart';
 
@@ -84,6 +85,9 @@ void main() async {
     final db = await dbService.database;
     final memoryService = MemoryService(db);
     await memoryService.loadMemories();
+
+    // 初始化日期变更检测服务（单例，自动开始监听）
+    DateChangeService();
 
     runApp(
       MultiProvider(

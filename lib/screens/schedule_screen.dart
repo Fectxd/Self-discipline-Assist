@@ -26,6 +26,7 @@ import '../services/day_service.dart';
 import '../services/work_schedule_service.dart';
 import '../services/holiday_service.dart';
 import '../services/ai_service.dart';
+import '../services/date_change_service.dart';
 import '../config/api_keys.dart';
 import '../models/day_type.dart';
 import '../models/holiday.dart';
@@ -85,9 +86,12 @@ class ScheduleScreenState extends State<ScheduleScreen> {
 
   // 标记是否应该滚动到当前任务（仅在从外部导航进入时为true）
   bool _shouldScrollToCurrent = false;
-  
+
   // 记录上次审批数量，用于判断审批窗是否首次弹出
   int _lastPendingActionsCount = 0;
+
+  // 日程时间点检查定时器
+  Timer? _scheduleTimeCheckTimer;
 
   @override
   void initState() {
@@ -103,6 +107,12 @@ class ScheduleScreenState extends State<ScheduleScreen> {
 
     _loadSchedules();
     _loadMessages();
+
+    // 监听日期变更服务
+    DateChangeService().addListener(_onDateChanged);
+
+    // 启动日程时间点检查（仅在有今天的日程时）
+    _startScheduleTimeCheck();
   }
 
   Future<void> _loadMessages() async {
@@ -165,10 +175,58 @@ class ScheduleScreenState extends State<ScheduleScreen> {
 
   @override
   void dispose() {
+    DateChangeService().removeListener(_onDateChanged);
+    _scheduleTimeCheckTimer?.cancel();
     _textController.dispose();
     _scheduleScrollController.dispose();
     _messageScrollController.dispose();
     super.dispose();
+  }
+
+  /// 启动日程时间点检查
+  void _startScheduleTimeCheck() {
+    _scheduleTimeCheckTimer?.cancel();
+
+    // 只在今天且有带时间的日程时才启动定时器
+    if (!_isToday() || _schedules.isEmpty) {
+      return;
+    }
+
+    // 检查是否有任何带时间的日程
+    final hasTimedSchedules = _schedules.any(
+      (s) => s.startTime != null || s.endTime != null,
+    );
+
+    if (!hasTimedSchedules) {
+      return;
+    }
+
+    // 每30秒检查一次
+    _scheduleTimeCheckTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _checkScheduleTimeUpdate(),
+    );
+  }
+
+  /// 检查是否需要更新日程高亮
+  void _checkScheduleTimeUpdate() {
+    if (!_isToday() || !mounted) {
+      _scheduleTimeCheckTimer?.cancel();
+      return;
+    }
+
+    // 触发重建以更新高亮状态
+    setState(() {});
+  }
+
+  /// 日期变更回调
+  void _onDateChanged() {
+    debugPrint('🔄 日程页收到日期变更通知');
+
+    // 日期变更时只刷新数据，不改变用户选择的日期
+    // 避免在0点时强制跳转打断用户操作
+    _shouldScrollToCurrent = false; // 日期自然变更不需要滚动
+    _loadSchedules();
   }
 
   /// 将消息加入并保存，同时滚动到底部
@@ -402,6 +460,9 @@ class ScheduleScreenState extends State<ScheduleScreen> {
         List.generate(_schedules.length, (_) => GlobalKey()),
       );
     });
+
+    // 重新启动时间检查（根据当前日程情况）
+    _startScheduleTimeCheck();
 
     // 滚动到合适的位置
     WidgetsBinding.instance.addPostFrameCallback((_) {
