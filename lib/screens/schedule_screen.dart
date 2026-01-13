@@ -916,6 +916,248 @@ class ScheduleScreenState extends State<ScheduleScreen> {
     }
   }
 
+  /// 构建窄屏聊天组件（包含拉杆、聊天面板、输入框）
+  Widget _buildNarrowChatWidget(double totalH) {
+    const double expandedFraction = 0.75;
+    const double normalFraction = 0.40;
+    const double minimizedFraction = 0.0;
+
+    double chatFraction;
+    if (_panelState == PanelSizeState.expanded) {
+      chatFraction = expandedFraction;
+    } else if (_panelState == PanelSizeState.minimized) {
+      chatFraction = minimizedFraction;
+    } else {
+      chatFraction = normalFraction;
+    }
+
+    if (_isDragging) chatFraction = _chatFraction;
+
+    const double handleH = 18.0;
+    final double maxChatH = (totalH - 80.0) <= 0.0 ? 0.0 : (totalH - 80.0);
+    final double chatH = (totalH * chatFraction).clamp(0.0, maxChatH);
+
+    return SizedBox(
+      height: chatH + handleH,
+      child: ChatPanel(
+        messages: _messages,
+        controller: _messageScrollController,
+        isLoading: _isLoading,
+        onCheckApiConfig: () => _openApiConfigDialog(highlight: true),
+        onClearHistory: _clearChatHistory,
+        dismissibleKey: ValueKey('dismissible_$_dismissibleKeyCounter'),
+        onDragStart: (details) {
+          setState(() {
+            _isDragging = true;
+          });
+        },
+        onDragUpdate: (details) {
+          setState(() {
+            _chatFraction = (_chatFraction - details.delta.dy / totalH).clamp(
+              minimizedFraction,
+              expandedFraction,
+            );
+          });
+        },
+        onDragEnd: (details) {
+          setState(() {
+            _isDragging = false;
+            _snapToNearest();
+          });
+        },
+        onTap: () {
+          setState(() {
+            if (_panelState == PanelSizeState.normal) {
+              _setPanelState(PanelSizeState.expanded);
+            } else if (_panelState == PanelSizeState.expanded) {
+              _setPanelState(PanelSizeState.minimized);
+            } else {
+              _setPanelState(PanelSizeState.normal);
+            }
+          });
+        },
+      ),
+    );
+  }
+
+  /// 构建日程列表区域（包含header、审批卡片、日程列表）
+  /// [forWideLayout] 为true时使用普通ScrollView（避免RefreshController冲突）
+  Widget _buildScheduleSection({bool forWideLayout = false}) {
+    return Column(
+      children: [
+        ScheduleHeader(
+          selectedDate: _selectedDate,
+          dayType: _dayType,
+          holiday: _holiday,
+          isToday: _isToday(),
+          onLongPressDayType: _showDayTypeDialog,
+          onAddSchedule: _showAddScheduleDialog,
+        ),
+        if (_aiService.pendingActions.isNotEmpty)
+          ApprovalCardList(
+            actions: _aiService.pendingActions,
+            onApprove: _approveAction,
+            onReject: _rejectAction,
+          ),
+        Expanded(
+          child: forWideLayout
+              ? _buildScheduleListForWideLayout()
+              : _buildScheduleListWithRefresh(),
+        ),
+      ],
+    );
+  }
+
+  /// 构建带下拉刷新的日程列表（窄屏模式）
+  Widget _buildScheduleListWithRefresh() {
+    return _schedules.isEmpty
+        ? SmartRefresher(
+            controller: _refreshController,
+            enablePullDown: true,
+            enablePullUp: true,
+            header: buildSwitchRefreshHeader(isTop: true),
+            footer: buildCustomPullFooter(),
+            onRefresh: _onRefresh,
+            onLoading: _onLoading,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  physics: const NeverScrollableScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.event_note,
+                            size: 48,
+                            color: Colors.grey.shade400,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            '暂无日程',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          )
+        : SmartRefresher(
+            controller: _refreshController,
+            enablePullDown: true,
+            enablePullUp: true,
+            header: buildSwitchRefreshHeader(isTop: true),
+            footer: buildCustomPullFooter(),
+            onRefresh: _onRefresh,
+            onLoading: _onLoading,
+            child: ListView.builder(
+              controller: _scheduleScrollController,
+              itemCount: _getScheduleItemCount(),
+              itemBuilder: (context, index) => _buildScheduleItemAtIndex(index),
+            ),
+          );
+  }
+
+  /// 构建不带下拉刷新的日程列表（宽屏模式）
+  Widget _buildScheduleListForWideLayout() {
+    return _schedules.isEmpty
+        ? LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.event_note,
+                          size: 48,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          '暂无日程',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          )
+        : ListView.builder(
+            controller: _scheduleScrollController,
+            itemCount: _getScheduleItemCount(),
+            itemBuilder: (context, index) => _buildScheduleItemAtIndex(index),
+          );
+  }
+
+  /// 获取日程列表项数量
+  int _getScheduleItemCount() {
+    final (currentInfoIndex, isPrevCurrent) = _getCurrentScheduleInfo();
+    final showPrevLast = isPrevCurrent && _prevSchedules.isNotEmpty;
+    final hasPrev = showPrevLast;
+    final hasNext = _nextSchedules.isNotEmpty;
+
+    return (hasPrev ? 2 : 0) + _schedules.length + (hasNext ? 2 : 0);
+  }
+
+  /// 构建指定索引的日程列表项
+  Widget _buildScheduleItemAtIndex(int index) {
+    int currentIndex = index;
+    final (currentInfoIndex, isPrevCurrent) = _getCurrentScheduleInfo();
+    final showPrevLast = isPrevCurrent && _prevSchedules.isNotEmpty;
+    final hasPrev = showPrevLast;
+    final hasNext = _nextSchedules.isNotEmpty;
+
+    if (hasPrev) {
+      if (currentIndex == 0) {
+        return _buildScheduleItemPrevAsCurrent(_prevSchedules.last);
+      }
+      currentIndex -= 1;
+      if (currentIndex == 0 && _schedules.isNotEmpty) {
+        return _buildSectionDivider('—今天—');
+      }
+      if (_schedules.isNotEmpty) {
+        currentIndex -= 1;
+      }
+    }
+
+    if (currentIndex < _schedules.length) {
+      return _buildScheduleItem(_schedules[currentIndex]);
+    }
+    currentIndex -= _schedules.length;
+
+    if (hasNext) {
+      if (currentIndex == 0) {
+        return _buildSectionDivider('—后一天—');
+      }
+      if (currentIndex == 1) {
+        return _buildScheduleItemGrey(_nextSchedules.first);
+      }
+    }
+
+    return const SizedBox.shrink();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -940,259 +1182,265 @@ class ScheduleScreenState extends State<ScheduleScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          ScheduleHeader(
-            selectedDate: _selectedDate,
-            dayType: _dayType,
-            holiday: _holiday,
-            isToday: _isToday(),
-            onLongPressDayType: _showDayTypeDialog,
-            onAddSchedule: _showAddScheduleDialog,
-          ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final screenWidth = constraints.maxWidth;
+          final screenHeight = constraints.maxHeight;
+          final isWideLayout = screenWidth >= screenHeight;
 
-          if (_aiService.pendingActions.isNotEmpty)
-            ApprovalCardList(
-              actions: _aiService.pendingActions,
-              onApprove: _approveAction,
-              onReject: _rejectAction,
-            ),
-
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                const double expandedFraction = 0.75;
-                const double normalFraction = 0.40;
-                // 将最小状态设置为 0.0 — 聊天区可完全收起以便拉杠贴合底部
-                const double minimizedFraction = 0.0;
-
-                double chatFraction;
-                if (_panelState == PanelSizeState.expanded) {
-                  chatFraction = expandedFraction;
-                } else if (_panelState == PanelSizeState.minimized) {
-                  chatFraction = minimizedFraction;
-                } else {
-                  chatFraction = normalFraction;
-                }
-
-                if (_isDragging) chatFraction = _chatFraction;
-
-                final double totalH = constraints.maxHeight;
-                const double handleH = 18.0;
-                // 允许 chat 区高度为 0，使其可以完全收起
-                // clamp's max must be >= min; ensure max is non-negative
-                final double maxChatH = (totalH - 80.0) <= 0.0
-                    ? 0.0
-                    : (totalH - 80.0);
-                final double chatH = (totalH * chatFraction).clamp(
-                  0.0,
-                  maxChatH,
-                );
-                // schedule 区最大允许到 totalH - handleH（当 chat 为 0 时，schedule 可以占满剩余空间）
-                final double maxScheduleH = (totalH - handleH) <= 0.0
-                    ? 0.0
-                    : (totalH - handleH);
-                final double scheduleH = (totalH - chatH - handleH).clamp(
-                  0.0,
-                  maxScheduleH,
-                );
-
-                // 仅在审批窗首次弹出时自动调整到第二档
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  final currentCount = _aiService.pendingActions.length;
-                  // 当审批数量从0变为>0时，说明审批窗首次弹出
-                  if (mounted &&
-                      _lastPendingActionsCount == 0 &&
-                      currentCount > 0 &&
-                      _panelState != PanelSizeState.normal) {
-                    _setPanelState(PanelSizeState.normal);
-                  }
-                  _lastPendingActionsCount = currentCount;
-                });
-
-                return Column(
-                  children: [
-                    SizedBox(
-                      height: scheduleH,
-                      child: _schedules.isEmpty
-                          ? SmartRefresher(
-                              controller: _refreshController,
-                              enablePullDown: true,
-                              enablePullUp: true,
-                              header: buildSwitchRefreshHeader(isTop: true),
-                              footer: buildCustomPullFooter(),
-                              onRefresh: _onRefresh,
-                              onLoading: _onLoading,
-                              child: LayoutBuilder(
-                                builder: (context, constraints) {
-                                  return SingleChildScrollView(
-                                    physics:
-                                        const NeverScrollableScrollPhysics(),
-                                    child: ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                        minHeight: constraints.maxHeight,
-                                      ),
-                                      child: Center(
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              Icons.event_note,
-                                              size: 48,
-                                              color: Colors.grey.shade400,
-                                            ),
-                                            const SizedBox(height: 12),
-                                            Text(
-                                              '暂无日程',
-                                              style: TextStyle(
-                                                fontSize: 16,
-                                                color: Colors.grey.shade600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            )
-                          : SmartRefresher(
-                              controller: _refreshController,
-                              enablePullDown: true,
-                              enablePullUp: true,
-                              header: buildSwitchRefreshHeader(isTop: true),
-                              footer: buildCustomPullFooter(),
-                              onRefresh: _onRefresh,
-                              onLoading: _onLoading,
-                              child: ListView.builder(
-                                controller: _scheduleScrollController,
-                                itemCount: () {
-                                  // 检查昨天最后一个是否是当前项
-                                  final (currentInfoIndex, isPrevCurrent) =
-                                      _getCurrentScheduleInfo();
-                                  final showPrevLast =
-                                      isPrevCurrent &&
-                                      _prevSchedules.isNotEmpty;
-                                  final hasPrev = showPrevLast;
-                                  final hasNext = _nextSchedules.isNotEmpty;
-
-                                  return (hasPrev ? 2 : 0) +
-                                      _schedules.length +
-                                      (hasNext ? 2 : 0);
-                                }(),
-                                itemBuilder: (context, index) {
-                                  int currentIndex = index;
-                                  final (currentInfoIndex, isPrevCurrent) =
-                                      _getCurrentScheduleInfo();
-                                  final showPrevLast =
-                                      isPrevCurrent &&
-                                      _prevSchedules.isNotEmpty;
-                                  final hasPrev = showPrevLast;
-                                  final hasNext = _nextSchedules.isNotEmpty;
-
-                                  if (hasPrev) {
-                                    // 前一天最后一个作为当前项时，显示在今天第一个之前
-                                    if (currentIndex == 0) {
-                                      return _buildScheduleItemPrevAsCurrent(
-                                        _prevSchedules.last,
-                                      );
-                                    }
-                                    currentIndex -= 1;
-                                    // 在前一天最后一项和今天第一项之间添加分隔符
-                                    if (currentIndex == 0 &&
-                                        _schedules.isNotEmpty) {
-                                      return _buildSectionDivider('—今天—');
-                                    }
-                                    if (_schedules.isNotEmpty) {
-                                      currentIndex -= 1;
-                                    }
-                                  }
-
-                                  // 今天的日程
-                                  if (currentIndex < _schedules.length) {
-                                    return _buildScheduleItem(
-                                      _schedules[currentIndex],
-                                    );
-                                  }
-                                  currentIndex -= _schedules.length;
-
-                                  if (hasNext) {
-                                    if (currentIndex == 0) {
-                                      return _buildSectionDivider('—后一天—');
-                                    }
-                                    if (currentIndex == 1) {
-                                      return _buildScheduleItemGrey(
-                                        _nextSchedules.first,
-                                      );
-                                    }
-                                  }
-
-                                  return const SizedBox.shrink();
-                                },
-                              ),
-                            ),
-                    ),
-                    SizedBox(
-                      height: chatH + handleH,
-                      child: ChatPanel(
-                        messages: _messages,
-                        controller: _messageScrollController,
-                        isLoading: _isLoading,
-                        onCheckApiConfig: () =>
-                            _openApiConfigDialog(highlight: true),
-                        onClearHistory: _clearChatHistory,
-                        dismissibleKey: ValueKey(
-                          'dismissible_$_dismissibleKeyCounter',
+          // 宽屏布局：日程表左侧，聊天框右侧
+          if (isWideLayout) {
+            return Row(
+              key: const ValueKey('wide_layout'),
+              children: [
+                // 左侧：日程列表区域（固定宽度 380）
+                SizedBox(
+                  width: 380,
+                  child: _buildScheduleSection(forWideLayout: true),
+                ),
+                // 右侧：聊天区域（占据剩余空间）
+                Expanded(
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: ChatPanel(
+                          messages: _messages,
+                          controller: _messageScrollController,
+                          isLoading: _isLoading,
+                          onCheckApiConfig: () =>
+                              _openApiConfigDialog(highlight: true),
+                          onClearHistory: _clearChatHistory,
+                          dismissibleKey: ValueKey(
+                            'dismissible_$_dismissibleKeyCounter',
+                          ),
+                          // 宽屏模式不需要拉杆功能
+                          onDragStart: null,
+                          onDragUpdate: null,
+                          onDragEnd: null,
+                          onTap: null,
                         ),
-                        onDragStart: (details) {
-                          setState(() {
-                            _isDragging = true;
-                          });
-                        },
-                        onDragUpdate: (details) {
-                          setState(() {
-                            _chatFraction =
-                                (_chatFraction - details.delta.dy / totalH)
-                                    .clamp(minimizedFraction, expandedFraction);
-                          });
-                        },
-                        onDragEnd: (details) {
-                          setState(() {
-                            _isDragging = false;
-                            _snapToNearest();
-                          });
-                        },
-                        onTap: () {
-                          setState(() {
-                            if (_panelState == PanelSizeState.normal) {
-                              _setPanelState(PanelSizeState.expanded);
-                            } else if (_panelState == PanelSizeState.expanded) {
-                              _setPanelState(PanelSizeState.minimized);
-                            } else {
-                              _setPanelState(PanelSizeState.normal);
-                            }
-                          });
-                        },
                       ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
+                      ChatInputBar(
+                        controller: _textController,
+                        isLoading: _isLoading,
+                        onSubmit: _handleSubmit,
+                        onTap: null, // 宽屏模式不需要点击展开功能
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          }
 
-          // 输入框（固定底部）
-          ChatInputBar(
-            controller: _textController,
-            isLoading: _isLoading,
-            onSubmit: _handleSubmit,
-            onTap: () =>
-                setState(() => _setPanelState(PanelSizeState.expanded)),
-          ),
-        ],
+          // 窄屏布局：保持原有的上下排列布局
+          return Column(
+            key: const ValueKey('narrow_layout'),
+            children: [
+              ScheduleHeader(
+                selectedDate: _selectedDate,
+                dayType: _dayType,
+                holiday: _holiday,
+                isToday: _isToday(),
+                onLongPressDayType: _showDayTypeDialog,
+                onAddSchedule: _showAddScheduleDialog,
+              ),
+              if (_aiService.pendingActions.isNotEmpty)
+                ApprovalCardList(
+                  actions: _aiService.pendingActions,
+                  onApprove: _approveAction,
+                  onReject: _rejectAction,
+                ),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    const double expandedFraction = 0.75;
+                    const double normalFraction = 0.40;
+                    const double minimizedFraction = 0.0;
+
+                    double chatFraction;
+                    if (_panelState == PanelSizeState.expanded) {
+                      chatFraction = expandedFraction;
+                    } else if (_panelState == PanelSizeState.minimized) {
+                      chatFraction = minimizedFraction;
+                    } else {
+                      chatFraction = normalFraction;
+                    }
+
+                    if (_isDragging) chatFraction = _chatFraction;
+
+                    final double totalH = constraints.maxHeight;
+                    const double handleH = 18.0;
+                    final double maxChatH = (totalH - 80.0) <= 0.0
+                        ? 0.0
+                        : (totalH - 80.0);
+                    final double chatH = (totalH * chatFraction).clamp(
+                      0.0,
+                      maxChatH,
+                    );
+                    final double maxScheduleH = (totalH - handleH) <= 0.0
+                        ? 0.0
+                        : (totalH - handleH);
+                    final double scheduleH = (totalH - chatH - handleH).clamp(
+                      0.0,
+                      maxScheduleH,
+                    );
+
+                    // 仅在审批窗首次弹出时自动调整到第二档
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      final currentCount = _aiService.pendingActions.length;
+                      if (mounted &&
+                          _lastPendingActionsCount == 0 &&
+                          currentCount > 0 &&
+                          _panelState != PanelSizeState.normal) {
+                        _setPanelState(PanelSizeState.normal);
+                      }
+                      _lastPendingActionsCount = currentCount;
+                    });
+
+                    return Column(
+                      children: [
+                        SizedBox(
+                          height: scheduleH,
+                          child: _schedules.isEmpty
+                              ? SmartRefresher(
+                                  controller: _refreshController,
+                                  enablePullDown: true,
+                                  enablePullUp: true,
+                                  header: buildSwitchRefreshHeader(isTop: true),
+                                  footer: buildCustomPullFooter(),
+                                  onRefresh: _onRefresh,
+                                  onLoading: _onLoading,
+                                  child: LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      return SingleChildScrollView(
+                                        physics:
+                                            const NeverScrollableScrollPhysics(),
+                                        child: ConstrainedBox(
+                                          constraints: BoxConstraints(
+                                            minHeight: constraints.maxHeight,
+                                          ),
+                                          child: Center(
+                                            child: Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  Icons.event_note,
+                                                  size: 48,
+                                                  color: Colors.grey.shade400,
+                                                ),
+                                                const SizedBox(height: 12),
+                                                Text(
+                                                  '暂无日程',
+                                                  style: TextStyle(
+                                                    fontSize: 16,
+                                                    color: Colors.grey.shade600,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                )
+                              : SmartRefresher(
+                                  controller: _refreshController,
+                                  enablePullDown: true,
+                                  enablePullUp: true,
+                                  header: buildSwitchRefreshHeader(isTop: true),
+                                  footer: buildCustomPullFooter(),
+                                  onRefresh: _onRefresh,
+                                  onLoading: _onLoading,
+                                  child: ListView.builder(
+                                    controller: _scheduleScrollController,
+                                    itemCount: () {
+                                      // 检查昨天最后一个是否是当前项
+                                      final (currentInfoIndex, isPrevCurrent) =
+                                          _getCurrentScheduleInfo();
+                                      final showPrevLast =
+                                          isPrevCurrent &&
+                                          _prevSchedules.isNotEmpty;
+                                      final hasPrev = showPrevLast;
+                                      final hasNext = _nextSchedules.isNotEmpty;
+
+                                      return (hasPrev ? 2 : 0) +
+                                          _schedules.length +
+                                          (hasNext ? 2 : 0);
+                                    }(),
+                                    itemBuilder: (context, index) {
+                                      int currentIndex = index;
+                                      final (currentInfoIndex, isPrevCurrent) =
+                                          _getCurrentScheduleInfo();
+                                      final showPrevLast =
+                                          isPrevCurrent &&
+                                          _prevSchedules.isNotEmpty;
+                                      final hasPrev = showPrevLast;
+                                      final hasNext = _nextSchedules.isNotEmpty;
+
+                                      if (hasPrev) {
+                                        // 前一天最后一个作为当前项时，显示在今天第一个之前
+                                        if (currentIndex == 0) {
+                                          return _buildScheduleItemPrevAsCurrent(
+                                            _prevSchedules.last,
+                                          );
+                                        }
+                                        currentIndex -= 1;
+                                        // 在前一天最后一项和今天第一项之间添加分隔符
+                                        if (currentIndex == 0 &&
+                                            _schedules.isNotEmpty) {
+                                          return _buildSectionDivider('—今天—');
+                                        }
+                                        if (_schedules.isNotEmpty) {
+                                          currentIndex -= 1;
+                                        }
+                                      }
+
+                                      // 今天的日程
+                                      if (currentIndex < _schedules.length) {
+                                        return _buildScheduleItem(
+                                          _schedules[currentIndex],
+                                        );
+                                      }
+                                      currentIndex -= _schedules.length;
+
+                                      if (hasNext) {
+                                        if (currentIndex == 0) {
+                                          return _buildSectionDivider('—后一天—');
+                                        }
+                                        if (currentIndex == 1) {
+                                          return _buildScheduleItemGrey(
+                                            _nextSchedules.first,
+                                          );
+                                        }
+                                      }
+
+                                      return const SizedBox.shrink();
+                                    },
+                                  ),
+                                ),
+                        ),
+                        _buildNarrowChatWidget(totalH),
+                      ],
+                    );
+                  },
+                ),
+              ),
+
+              // 输入框（固定底部）
+              ChatInputBar(
+                controller: _textController,
+                isLoading: _isLoading,
+                onSubmit: _handleSubmit,
+                onTap: () =>
+                    setState(() => _setPanelState(PanelSizeState.expanded)),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1623,9 +1871,7 @@ class ScheduleScreenState extends State<ScheduleScreen> {
       _shouldScrollToCurrent = false; // 删除后刷新不触发滚动
       await _loadSchedules();
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      );
+      ScaffoldMessenger.of(context);
       SnackBarHelper.showMessage(context, '已删除「${schedule.title}」');
     }
   }

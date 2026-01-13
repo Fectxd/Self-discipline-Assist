@@ -52,7 +52,7 @@ app.*.map.json
 # API Keys (important!)
 lib/config/api_keys.dart
 
-# APPÃÜÔ¿Éú³É½Å±¾£¨°üº¬Ãô¸ÐÐÅÏ¢£©
+# APPï¿½ï¿½Ô¿ï¿½ï¿½ï¿½É½Å±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢ï¿½ï¿½
 generate_app_secret.ps1
 
 # User data
@@ -64,3 +64,5 @@ nul
 
 # Java heap dump files
 java_pid*.hprof
+
+ä¸Šä¼ github.md

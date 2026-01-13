@@ -101,7 +101,7 @@ flutter:
 # 使用新键 `flutter_launcher_icons`，旧键 `flutter_icons` 已被弃用
 flutter_launcher_icons:
   android: true
-  ios: false
+  ios: true
   image_path: "assets/icons/app_icon.png"
   adaptive_icon_background: "#1A7EDB"
   adaptive_icon_foreground: "assets/icons/app_icon.png"
