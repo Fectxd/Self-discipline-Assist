@@ -39,6 +39,7 @@ dependencies:
   
   # UI 组件
   table_calendar: ^3.1.0
+  intl: any  # 由 flutter_localizations 提供
   
   # 状态管理
   provider: ^6.1.5+1
@@ -47,6 +48,7 @@ dependencies:
   sqflite_common_ffi: ^2.4.0
   sqflite: ^2.2.8
   path_provider: ^2.1.5
+  path: any  # 由 Flutter SDK 提供
   shared_preferences: ^2.3.5
 
   # 网络请求

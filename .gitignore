@@ -58,6 +58,8 @@ generate_app_secret.ps1
 # User data
 *.json
 !pubspec.lock
+!assets/cities.json
+!assets/**/*.json
 
 # Windows reserved files
 nul
