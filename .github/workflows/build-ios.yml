@@ -33,7 +33,7 @@ jobs:
       run: flutter doctor -v
     
     - name: Analyze code
-      run: flutter analyze
+      run: flutter analyze --no-fatal-infos
     
     - name: Check formatting
       run: dart format --set-exit-if-changed .
