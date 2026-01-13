@@ -48,7 +48,6 @@ dependencies:
   sqflite_common_ffi: ^2.4.0
   sqflite: ^2.2.8
   path_provider: ^2.1.5
-  path: ^1.9.1
   shared_preferences: ^2.3.5
 
   # 网络请求
