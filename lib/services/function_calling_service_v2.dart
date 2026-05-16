@@ -122,7 +122,7 @@ class FunctionCallingServiceV2 implements AIService {
 
 回复风格：自然语言，不提函数名、id等技术细节。
 
-当前：${DateTime.now().toString().split(".")[0]}"""
+当前：${DateTime.now().toString().split('.')[0]}""";
 
     if (memory != null && !memory.isEmpty) {
       return basePrompt + memory.toPromptText();
