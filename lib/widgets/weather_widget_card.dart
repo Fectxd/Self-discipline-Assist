@@ -273,6 +273,10 @@ class _WeatherWidgetCardState extends State<WeatherWidgetCard>
           // 分时天气
           if (hourly != null && hourly.isNotEmpty)
             _buildHourlyWeatherChart(hourly, forecast),
+
+          // 底部留白：当温度曲线数据获取不到时，确保上半部分不会直接触底
+          if (hourly == null || hourly.isEmpty)
+            const SizedBox(height: 12),
         ],
       ),
     );
