@@ -50,7 +50,6 @@ app.*.map.json
 *.db-wal
 
 # API Keys (important!)
-lib/config/api_keys.dart
 
 # APP��Կ���ɽű�������������Ϣ��
 generate_app_secret.ps1
