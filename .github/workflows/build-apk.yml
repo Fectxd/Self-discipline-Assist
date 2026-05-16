@@ -20,16 +20,13 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Build APK (debug)
+      - name: Build APK
         run: flutter build apk --debug
 
-      - name: Build APK (release)
-        run: flutter build apk --release
-
-      - name: Upload APK artifacts
+      - name: Upload APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: self-discipline-apk
-          path: |
-            build/app/outputs/flutter-apk/*.apk
+          path: build/app/outputs/flutter-apk/*.apk
           retention-days: 7
