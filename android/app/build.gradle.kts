@@ -33,7 +33,7 @@ android {
 
         // 仅构建 arm64-v8a 架构
         ndk {
-            abiFilters "arm64-v8a"
+            abiFilters += listOf("arm64-v8a")
         }
     }
 
