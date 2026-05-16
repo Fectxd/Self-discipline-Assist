@@ -19,9 +19,35 @@ class ApiConfigService extends ChangeNotifier {
   static const String _defaultAuthPrefix = 'Bearer';
 
   static const List<String> supportedModels = [
+    // OpenAI
     'gpt-5-nano',
+    'gpt-5-nano-nothinking',
+    'gpt-4o',
+    'gpt-4o-mini',
+    // Anthropic
+    'claude-sonnet-4-20250514',
+    'claude-sonnet-4-20250514-nothinking',
+    // Google
     'gemini-2.5-flash',
+    'gemini-2.5-pro',
+    // DeepSeek
+    'deepseek-chat',
+    'deepseek-reasoner',
+    // 国内 OpenAI 兼容
+    'gptsapi',
+    'onechats',
+    // 其他
+    'custom',
   ];
+
+  /// 是否为 DeepSeek 模型
+  bool get isDeepSeek => model.toLowerCase().contains('deepseek');
+
+  /// 是否为 Anthropic 模型
+  bool get isAnthropic => model.toLowerCase().contains('claude');
+
+  /// 是否为自定义模型
+  bool get isCustom => model == 'custom';
 
   late SharedPreferences _prefs;
   bool _isInitialized = false;
@@ -141,8 +167,10 @@ class ApiConfigService extends ChangeNotifier {
           'api-key': apiKey,
       };
 
+      final currentModel = _prefs.getString(_keyModel) ?? _defaultModel;
+
       final body = jsonEncode({
-        'model': 'gpt-4o-mini',
+        'model': currentModel,
         'messages': [
           {'role': 'user', 'content': 'test'},
         ],

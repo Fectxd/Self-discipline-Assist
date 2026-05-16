@@ -53,10 +53,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _autoSaveConfig() async {
     final config = context.read<ApiConfigService>();
+    final modelToSave = _isCustomModel ? _customModelController.text.trim() : _selectedModel;
+    if (modelToSave.isEmpty) return;
     await config.saveConfig(
       apiKey: _apiKeyController.text.trim(),
       baseUrl: _baseUrlController.text.trim(),
-      model: _selectedModel,
+      model: modelToSave,
       useBearerAuth: _useBearerAuth,
     );
   }
@@ -450,7 +452,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: InkWell(
                       onTap: () {
-                        setState(() => _selectedModel = model);
+                        setState(() {
+                          _selectedModel = model;
+                          _isCustomModel = model == 'custom';
+                        });
                         _autoSaveConfig();
                       },
                       borderRadius: BorderRadius.circular(12),
@@ -522,6 +527,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 }).toList(),
               ],
             ),
+            if (_selectedModel == 'custom' || _isCustomModel)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: TextField(
+                  controller: _customModelController,
+                  decoration: const InputDecoration(
+                    labelText: '自定义模型名称',
+                    hintText: 'gpt-4o-mini, deepseek-chat, claude-sonnet-4-20250514',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (_) => _autoSaveConfig(),
+                ),
+              ),
             const SizedBox(height: 12),
             SwitchListTile(
               title: const Text('使用 Bearer 认证'),
