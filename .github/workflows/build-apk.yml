@@ -21,7 +21,7 @@ jobs:
         run: flutter pub get
 
       - name: Build release APK (arm64 only)
-        run: flutter build apk --release --split-per-abi
+        run: flutter build apk --release
 
       - name: Upload APK
         if: always()
