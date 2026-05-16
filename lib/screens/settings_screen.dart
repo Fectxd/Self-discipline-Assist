@@ -25,9 +25,11 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _apiKeyController = TextEditingController();
   final _baseUrlController = TextEditingController();
+  final _customModelController = TextEditingController();
   String _selectedModel = ApiConfigService.supportedModels.first;
   bool _useBearerAuth = true;
   bool _obscureApiKey = true;
+  bool _isCustomModel = false;
 
   @override
   void initState() {
@@ -45,8 +47,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _baseUrlController.text = config.baseUrl;
     if (ApiConfigService.supportedModels.contains(config.model)) {
       _selectedModel = config.model;
+      _isCustomModel = false;
     } else {
-      _selectedModel = ApiConfigService.supportedModels.first;
+      _selectedModel = 'custom';
+      _isCustomModel = true;
+      _customModelController.text = config.model;
     }
     _useBearerAuth = config.useBearerAuth;
   }
@@ -67,6 +72,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _apiKeyController.dispose();
     _baseUrlController.dispose();
+    _customModelController.dispose();
     super.dispose();
   }
 
