@@ -30,6 +30,11 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = 200
         versionName = "2.0.1"
+
+        // 仅构建 arm64-v8a 架构
+        ndk {
+            abiFilters "arm64-v8a"
+        }
     }
 
     buildTypes {

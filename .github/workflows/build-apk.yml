@@ -20,8 +20,8 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Build APK
-        run: flutter build apk --debug
+      - name: Build release APK (arm64 only)
+        run: flutter build apk --release --split-per-abi
 
       - name: Upload APK
         if: always()
