@@ -20,11 +20,20 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Build release APK (arm64 only)
+      - name: Setup signing keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > upload-keystore.p12
+          cat > android/key.properties << 'EOF'
+          storeFile=../../upload-keystore.p12
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          keyPassword=${{ secrets.KEYSTORE_PASSWORD }}
+          EOF
+
+      - name: Build release APK (arm64, signed)
         run: flutter build apk --release
 
       - name: Upload APK
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: self-discipline-apk

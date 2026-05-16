@@ -66,4 +66,5 @@ nul
 # Java heap dump files
 java_pid*.hprof
 
-上传github.md
+上传github.mdupload-keystore.p12
+android/key.properties
