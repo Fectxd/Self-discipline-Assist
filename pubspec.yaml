@@ -45,7 +45,7 @@ dependencies:
   provider: ^6.1.5+1
   
   # 数据持久化
-  sqflite_common_ffi: ^2.4.0
+  sqflite_common_ffi: ^2.3.6
   sqflite: ^2.2.8
   path_provider: ^2.1.5
   path: any  # 由 Flutter SDK 提供
