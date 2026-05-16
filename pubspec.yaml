@@ -51,6 +51,10 @@ dependencies:
   path: any  # 由 Flutter SDK 提供
   shared_preferences: ^2.3.5
 
+  # 导入导出 - Android 外部存储访问
+  share_plus: ^10.0.0
+  file_picker: ^8.0.0
+
   # 网络请求
   http: ^1.6.0
   
