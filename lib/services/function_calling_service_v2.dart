@@ -122,7 +122,7 @@ class FunctionCallingServiceV2 implements AIService {
 
 回复风格：自然语言，不提函数名、id等技术细节。
 
-当前：${DateTime.now().toString().split(".")[0]}（周${_weekdayChinese(DateTime.now().weekday)}）"""
+当前：${DateTime.now().toString().split(".")[0]}"""
 
     if (memory != null && !memory.isEmpty) {
       return basePrompt + memory.toPromptText();
@@ -748,12 +748,6 @@ class FunctionCallingServiceV2 implements AIService {
     } else {
       return 'normal';
     }
-  }
-
-  /// 星期几中文
-  String _weekdayChinese(int weekday) {
-    const days = ['', '一', '二', '三', '四', '五', '六', '日'];
-    return days[weekday];
   }
 
   Future<Map<String, dynamic>> _getRecentSchedules(
