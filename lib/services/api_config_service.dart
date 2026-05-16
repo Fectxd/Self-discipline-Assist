@@ -18,28 +18,6 @@ class ApiConfigService extends ChangeNotifier {
   static const bool _defaultUseBearerAuth = true;
   static const String _defaultAuthPrefix = 'Bearer';
 
-  static const List<String> supportedModels = [
-    // OpenAI
-    'gpt-5-nano',
-    'gpt-5-nano-nothinking',
-    'gpt-4o',
-    'gpt-4o-mini',
-    // Anthropic
-    'claude-sonnet-4-20250514',
-    'claude-sonnet-4-20250514-nothinking',
-    // Google
-    'gemini-2.5-flash',
-    'gemini-2.5-pro',
-    // DeepSeek
-    'deepseek-chat',
-    'deepseek-reasoner',
-    // 国内 OpenAI 兼容
-    'gptsapi',
-    'onechats',
-    // 其他
-    'custom',
-  ];
-
   /// 是否为 DeepSeek 模型
   bool get isDeepSeek => model.toLowerCase().contains('deepseek');
 
@@ -48,6 +26,40 @@ class ApiConfigService extends ChangeNotifier {
 
   /// 是否为自定义模型
   bool get isCustom => model == 'custom';
+
+  /// 从 API 获取可用模型列表
+  Future<List<String>> fetchAvailableModels() async {
+    try {
+      final apiKey = _prefs.getString(_keyApiKey) ?? '';
+      final baseUrl = _prefs.getString(_keyBaseUrl) ?? _defaultBaseUrl;
+      if (apiKey.isEmpty) return [];
+
+      // 尝试从 /models 端点获取列表
+      final url = Uri.parse('$baseUrl/models');
+      final headers = {
+        'Content-Type': 'application/json',
+        'Authorization': '$_defaultAuthPrefix $apiKey',
+      };
+      final response = await http
+          .get(url, headers: headers)
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models = data['data'] as List?;
+        if (models != null) {
+          return models
+              .map((m) => m['id'] as String? ?? '')
+              .where((id) => id.isNotEmpty)
+              .toList()
+            ..sort();
+        }
+      }
+    } catch (_) {
+      // 静默失败，返回空列表
+    }
+    return [];
+  }
 
   late SharedPreferences _prefs;
   bool _isInitialized = false;

@@ -520,6 +520,7 @@ class FunctionCallingServiceV2 implements AIService {
       final finishReason = choices[0]['finish_reason'] as String?;
       final toolCalls = message['tool_calls'] as List?;
       final content = message['content'] as String?;
+      final reasoningContent = message['reasoning_content'] as String?;
 
       debugPrint('finish_reason: $finishReason');
       debugPrint('有 tool_calls: ${toolCalls != null && toolCalls.isNotEmpty}');
@@ -530,18 +531,22 @@ class FunctionCallingServiceV2 implements AIService {
         debugPrint('\n检测到 ${toolCalls.length} 个函数调用:');
 
         // 添加 assistant 的响应到历史
-        _messages.add(<String, dynamic>{
+        final asstMsg = <String, dynamic>{
           'role': 'assistant',
           'content': content,
-          'tool_calls': toolCalls.map((tc) => <String, dynamic>{
+        };
+        if (reasoningContent != null && reasoningContent.isNotEmpty) {
+          asstMsg['reasoning_content'] = reasoningContent;
+        }
+        asstMsg['tool_calls'] = toolCalls.map((tc) => <String, dynamic>{
             'id': tc['id'],
             'type': tc['type'],
             'function': <String, dynamic>{
               'name': tc['function']['name'],
               'arguments': tc['function']['arguments'],
             },
-          }).toList(),
-        });
+          }).toList();
+        _messages.add(asstMsg);
 
         // 执行每个工具调用
         for (var toolCall in toolCalls) {
@@ -576,10 +581,14 @@ class FunctionCallingServiceV2 implements AIService {
       // 情况2: 没有 tool_calls，返回最终回答
       if (content != null && content.isNotEmpty) {
         // 添加到历史
-        _messages.add(<String, dynamic>{
+        final asstMsg = <String, dynamic>{
           'role': 'assistant',
           'content': content,
-        });
+        };
+        if (reasoningContent != null && reasoningContent.isNotEmpty) {
+          asstMsg['reasoning_content'] = reasoningContent;
+        }
+        _messages.add(asstMsg);
 
         debugPrint('\n助手: $content');
         return content;

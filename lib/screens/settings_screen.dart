@@ -26,15 +26,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _apiKeyController = TextEditingController();
   final _baseUrlController = TextEditingController();
   final _customModelController = TextEditingController();
-  String _selectedModel = ApiConfigService.supportedModels.first;
+  String _selectedModel = 'deepseek-reasoner';
   bool _useBearerAuth = true;
   bool _obscureApiKey = true;
   bool _isCustomModel = false;
+  List<String> _availableModels = [];
+  bool _loadingModels = false;
 
   @override
   void initState() {
     super.initState();
     _loadConfig();
+    _loadAvailableModels();
 
     // 添加自动保存监听器
     _apiKeyController.addListener(_autoSaveConfig);
@@ -45,12 +48,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final config = context.read<ApiConfigService>();
     _apiKeyController.text = config.apiKey;
     _baseUrlController.text = config.baseUrl;
-    if (ApiConfigService.supportedModels.contains(config.model)) {
-      _selectedModel = config.model;
-      _isCustomModel = false;
-    } else {
-      _selectedModel = 'custom';
-      _isCustomModel = true;
+    _selectedModel = config.model;
+    _isCustomModel = config.model == 'custom' || config.isCustom;
+    if (_isCustomModel) {
       _customModelController.text = config.model;
     }
     _useBearerAuth = config.useBearerAuth;
@@ -69,6 +69,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   @override
+  void _loadAvailableModels() async {
+    setState(() => _loadingModels = true);
+    try {
+      final config = context.read<ApiConfigService>();
+      final models = await config.fetchAvailableModels();
+      if (mounted) {
+        setState(() {
+          _availableModels = models;
+          _loadingModels = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _loadingModels = false);
+      }
+    }
+  }
+
   void dispose() {
     _apiKeyController.dispose();
     _baseUrlController.dispose();
@@ -446,91 +464,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  '模型选择',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                Row(
+                  children: [
+                    const Text(
+                      '模型选择',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                    ),
+                    const Spacer(),
+                    if (_availableModels.isEmpty && !_loadingModels)
+                      Text('点击刷新获取模型列表',
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      ),
+                    if (_loadingModels)
+                      const SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    IconButton(
+                      icon: const Icon(Icons.refresh, size: 20),
+                      onPressed: _loadAvailableModels,
+                      tooltip: '刷新模型列表',
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
-                ...ApiConfigService.supportedModels.map((model) {
-                  final isSelected = _selectedModel == model;
-                  final isGemini = model.toLowerCase().contains('gemini');
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: InkWell(
-                      onTap: () {
-                        setState(() {
-                          _selectedModel = model;
-                          _isCustomModel = model == 'custom';
-                        });
-                        _autoSaveConfig();
-                      },
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: isSelected
-                                ? Theme.of(context).colorScheme.primary
-                                : Colors.grey.shade300,
-                            width: isSelected ? 2 : 1,
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                          color: isSelected
-                              ? Theme.of(
-                                  context,
-                                ).colorScheme.primary.withOpacity(0.05)
-                              : null,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              isGemini ? Icons.auto_awesome : Icons.psychology,
-                              color: isSelected
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Colors.grey.shade600,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    model,
-                                    style: TextStyle(
-                                      fontWeight: isSelected
-                                          ? FontWeight.w600
-                                          : FontWeight.w500,
-                                      color: isSelected
-                                          ? Theme.of(
-                                              context,
-                                            ).colorScheme.primary
-                                          : null,
-                                    ),
-                                  ),
-                                  if (model.contains('nothinking'))
-                                    Text(
-                                      '无思维链版本',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey.shade600,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            if (isSelected)
-                              Icon(
-                                Icons.check_circle,
-                                color: Theme.of(context).colorScheme.primary,
-                                size: 20,
-                              ),
-                          ],
-                        ),
+                DropdownButtonFormField<String>(
+                  value: _selectedModel,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  ),
+                  items: [
+                    ..._availableModels.map((model) => DropdownMenuItem(
+                      value: model,
+                      child: Text(model, overflow: TextOverflow.ellipsis),
+                    )),
+                    const DropdownMenuItem(
+                      value: 'custom',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit, size: 18),
+                          SizedBox(width: 8),
+                          Text('自定义模型'),
+                        ],
                       ),
                     ),
-                  );
-                }).toList(),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        _selectedModel = value;
+                        _isCustomModel = value == 'custom';
+                      });
+                      _autoSaveConfig();
+                    }
+                  },
+                ),
               ],
             ),
             if (_selectedModel == 'custom' || _isCustomModel)
