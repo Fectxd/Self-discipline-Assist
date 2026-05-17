@@ -999,7 +999,25 @@ class FunctionCallingServiceV2 implements AIService {
   }
 
   Future<void> _deleteSchedule(Map<String, dynamic> data) async {
-    await _dbService.deleteSchedule(data['id'].toString());
+    final id = data['id'].toString();
+
+    // 1. 动态生成日程 (格式: ruleId_2026-05-17T00:00:00.000) — 删规则
+    final parts = id.split('_');
+    final ruleId = parts.first;
+    if (ruleId.isNotEmpty && parts.length > 1) {
+      final rule = await _dbService.getRuleById(ruleId);
+      if (rule != null) {
+        final db = await _dbService.database;
+        await db.delete('schedule_rules', where: 'id = ?', whereArgs: [ruleId]);
+        await db.delete('schedule_overrides', where: 'rule_id = ?', whereArgs: [ruleId]);
+        debugPrint('[_deleteSchedule] 已删除规则: $ruleId');
+        return;
+      }
+    }
+
+    // 2. 手动创建的日程 (存在 schedules 表中)
+    await _dbService.deleteSchedule(id);
+    debugPrint('[_deleteSchedule] 已从 schedules 表删除: $id');
   }
 
   Future<void> _executeDeleteAll() async {
