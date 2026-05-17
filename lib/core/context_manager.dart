@@ -73,20 +73,47 @@ class ContextManager {
 
 核心规则：
 1. 创建/修改/删除日程必须调用 propose_action，禁止只回复"好的"
-2. 批量删除：用户说"删除所有日程"时，调用 propose_action(action_type="delete_all")
-3. 查询限制：
+2. 查询限制：
    - 7天内具体日程：get_recent_schedules
    - 了解规则概况：get_rules_summary（返回规则而非展开日程）
    - 禁止询问超过7天的具体日程
-4. 时间判断：
+3. 时间判断：
    - "10点"等模糊时间必须确认上午/下午
    - 00:00-04:00说"明早"=当天早晨；04:00-07:00需询问；07:00后=次日
    - 禁止安排过去的时间
-5. 时间字段：
+4. 时间字段：
    - time 必填（HH:mm格式）
    - 持续性活动（运动/会议/学习/工作/睡觉/吃饭/洗澡）必填 end_time
    - 瞬时事件（吃药/提醒/起床/出门）可不填 end_time
-6. 尊重自主性：优先用户需求，提供建议而非强制
+5. 尊重自主性：优先用户需求，提供建议而非强制
+
+📌 删除/修改日程 - 区分单次 vs 永久（严格遵循）：
+
+   A. 用户说"今天不做了/取消今天的X"/"把这个日程删掉（针对某一天）"
+      → 这是【单次跳过】，用 action_type="modify_once"
+      → 只传 id 和 date，不传 new_time/new_title 等字段
+      → 系统会创建 OverrideType.skip，只跳过这一天
+      → 示例: {"action_type":"modify_once","schedule_data":{"id":"ruleId_2026-05-17","date":"2026-05-17"}}
+
+   B. 用户说"取消这个规则/以后都不做X了/把这个删掉（针对整个规则）"
+      → 这是【永久删除规则】，用 action_type="delete"
+      → 传 schedule_data.id 为规则ID
+      → 这个规则的每一天都会被永久删除
+      → 示例: {"action_type":"delete","schedule_data":{"id":"ruleId"}}
+
+   C. 用户说"把所有日程都删了/清空所有日程"
+      → 这是【批量删除】，用 action_type="delete_all"
+      → 不需要 schedule_data
+
+   D. 用户说"今天把X改个时间"
+      → 这是【单次修改】，用 action_type="modify_once"
+      → 传 id、date，加上 new_time/new_end_time 等
+
+   辨别口诀：
+   - 说"今天/这次" → 单次 (modify_once)
+   - 说"以后/每次/永远" → 永久 (delete/modify)
+   - 只说"删掉X"但没有时间限定 → 必须反问用户：今天这次删掉，还是以后都取消？
+   - 用户命令模糊时：优先问清楚，不要猜测
 
 冲突检测优先级（创建前必检查）：
 
@@ -389,7 +416,7 @@ class ContextManager {
                 "delete_all",
               ],
               "description":
-                  "【必填】操作类型：create=创建规则, modify=修改规则, modify_once=仅修改某天, delete=删除单个日程, delete_all=删除所有日程规则",
+                  "【必填】操作类型：create=创建规则, modify=永久修改规则, modify_once=仅当天跳过/修改(不传new_*即为跳过这天), delete=永久删除整个规则, delete_all=删除所有日程规则",
             },
             "description": {
               "type": "string",
