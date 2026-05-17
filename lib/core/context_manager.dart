@@ -93,7 +93,7 @@ class ContextManager {
       → 这是【单次跳过】，用 action_type="modify_once"
       → 只传 id 和 date，不传 new_time/new_title 等字段
       → 系统会创建 OverrideType.skip，只跳过这一天
-      → 示例: {"action_type":"modify_once","schedule_data":{"id":"ruleId_2026-05-17","date":"2026-05-17"}}
+      → 示例: {"action_type":"modify_once","schedule_data":{"id":"ruleId_2026-05-17T00:00:00.000","date":"2026-05-17"}}
 
    B. 用户说"取消这个规则/以后都不做X了/把这个删掉（针对整个规则）"
       → 这是【永久删除规则】，用 action_type="delete"
@@ -426,7 +426,7 @@ class ContextManager {
               "type": "object",
               "description": "【必填】日程数据对象",
               "properties": {
-                "id": {"type": "string", "description": "【modify/delete时必填】日程ID"},
+                "id": {"type": "string", "description": "【modify/delete时必填】日程完整ID（格式: 规则UUID_日期T00:00:00.000，来自 get_recent_schedules 返回的 id 字段）"},
                 "title": {
                   "type": "string",
                   "description": "【create时必填】日程标题，如'晨跑'、'周会'、'吃药'",

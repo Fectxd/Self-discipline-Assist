@@ -924,18 +924,23 @@ class FunctionCallingServiceV2 implements AIService {
     String? ruleId;
 
     if (data.containsKey('id')) {
-      final scheduleId = data['id'] as String;
-      final parts = scheduleId.split('_');
-      date = (parts.length > 1 && DateTime.tryParse(parts[1]) != null)
-          ? DateTime.parse(parts[1])
-          : DateTime.parse(data['date'] as String);
+      final rawId = data['id'] as String;
+      final parts = rawId.split('_');
 
-      final schedules = await _dbService.getSchedulesByDate(date);
-      final s = schedules.firstWhere(
-        (s) => s.id == scheduleId,
-        orElse: () => throw Exception('未找到日程: $scheduleId'),
-      );
-      ruleId = s.sourceTemplateId ?? (throw Exception('该日程不是由规则生成的'));
+      // 情况A: id = "ruleId_2026-05-17T00:00:00.000" (完整日程ID)
+      if (parts.length > 1 && DateTime.tryParse(parts[1]) != null) {
+        date = DateTime.parse(parts[1]);
+        final schedules = await _dbService.getSchedulesByDate(date);
+        final s = schedules.firstWhere(
+          (s) => s.id == rawId,
+          orElse: () => throw Exception('未找到日程: $rawId'),
+        );
+        ruleId = s.sourceTemplateId ?? (throw Exception('该日程不是由规则生成的'));
+      } else {
+        // 情况B: id = "ruleId" (纯规则UUID，AI传错格式时的容错)
+        ruleId = rawId;
+        date = DateTime.parse(data['date'] as String);
+      }
     } else if (data.containsKey('title')) {
       ruleId = await _dbService.findRuleId(data['title'] as String, null)
           ?? (throw Exception('未找到匹配的规则'));
