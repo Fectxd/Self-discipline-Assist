@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// Token 估算器
 ///
 /// 无需调 API 就能估算 token 用量，用于上下文窗口管理。
