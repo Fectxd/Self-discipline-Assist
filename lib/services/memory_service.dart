@@ -259,28 +259,46 @@ class MemoryService extends ChangeNotifier {
 
   /// 从文本中提取搜索关键词
   /// 排除停用词和无意义词汇
+    /// 从文本中提取搜索关键词
+  /// 排除停用词和无意义词汇
   List<String> _extractKeywords(String text) {
     final stopWords = {
       '的', '了', '是', '在', '有', '我', '你', '他', '她', '它',
       '这', '那', '和', '与', '也', '都', '就', '还', '要', '把',
       '被', '让', '给', '为', '从', '对', '到', '去', '来', '说',
-      '吗', '吧', '呢', '啊', '哦', '嗯', '哈',
+      '吗', '吧', '呢', '啊', '哦', '噗', '哈',
       '什么', '怎么', '为什么', '如何', '哪个',
       '可以', '能', '会', '应该', '可能',
     };
 
-    // 先去掉标点
-    final cleaned = text.replaceAll(RegExp(r'[，。！？、；："\'\[\]\(\)【】「」『』《》—…·～]'), '');
+    // Remove punctuation
+    final cleaned = text.replaceAll(RegExp(r'[一-鿿㐀-䶿a-zA-Z0-9]'), '');
+    String punctuationRemoved = '';
+    for (int i = 0; i < text.length; i++) {
+      if (cleaned.contains(text[i])) {
+        punctuationRemoved += text[i];
+      }
+    }
+    if (punctuationRemoved.isEmpty) punctuationRemoved = text;
 
-    // 按空格/逗号分割，过滤停用词和短词
-    final tokens = cleaned.split(RegExp(r'[\s,，、]+'))
+    // Alternative: use unicode-safe approach
+    String noPunct = '';
+    for (int i = 0; i < text.length; i++) {
+      final c = text.codeUnitAt(i);
+      // Keep chinese chars, letters, digits
+      if ((c >= 0x4E00 && c <= 0x9FFF) || (c >= 0x3400 && c <= 0x4DBF) ||
+          (c >= 0x61 && c <= 0x7A) || (c >= 0x41 && c <= 0x5A) ||
+          (c >= 0x30 && c <= 0x39)) {
+        noPunct += text[i];
+      }
+    }
+
+    // Split by whitespace
+    final tokens = noPunct.split(RegExp(r'\s+'))
       ..removeWhere((t) => t.length < 2 || stopWords.contains(t));
 
-    // 去重
     return tokens.toSet().toList();
-  }
-
-  /// 清理低重要性且少使用的记忆（定期清理）
+  }  /// 清理低重要性且少使用的记忆（定期清理）
   Future<void> cleanupOldMemories({
     double minImportance = 0.3,
     int minUseCount = 1,

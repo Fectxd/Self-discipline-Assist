@@ -590,17 +590,13 @@ class ContextManager {
 
   // ─── 历史摘要压缩回调 ───
 
-  typedef SummaryCallback = Future<String> Function(
-    List<Map<String, dynamic>> messages,
-  );
-
   /// 用回调将早期对话压缩为摘要
   ///
   /// 当需要裁剪时，不直接丢弃，而是：
   /// 1. 收集要被裁剪的对话对
   /// 2. 调用回调（由 FunctionCallingServiceV2 提供）生成摘要
   /// 3. 用一条 system 摘要消息替代
-  Future<void> compressEarlyHistory(SummaryCallback summarizer) async {
+  Future<void> compressEarlyHistory(Future<String> Function(List<Map<String, dynamic>>) summarizer) async {
     if (_messages.length <= trimThreshold + 1) return;
 
     final systemMessages = <Map<String, dynamic>>[];
