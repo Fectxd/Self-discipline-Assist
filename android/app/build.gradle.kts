@@ -28,8 +28,9 @@ android {
         applicationId = "com.fectxd.selfdiscipline"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = 200
-        versionName = "2.0.1"
+        // versionCode 由 CI 传入 commit 数，CI 未传时默认 1
+        versionCode = (project.findProperty("versionCode") as String? ?: "1").toInt()
+        versionName = "2.0.${versionCode}"
 
         // 仅构建 arm64-v8a 架构
         ndk {

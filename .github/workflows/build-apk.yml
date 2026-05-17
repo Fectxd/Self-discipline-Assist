@@ -31,7 +31,10 @@ jobs:
           EOF
 
       - name: Build release APK (arm64, signed)
-        run: flutter build apk --release
+        run: |
+          COMMIT_COUNT=$(git rev-list --count HEAD)
+          echo "versionCode=$COMMIT_COUNT"
+          flutter build apk --release --dart-define=versionCode=$COMMIT_COUNT -PversionCode=$COMMIT_COUNT
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
