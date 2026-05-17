@@ -131,23 +131,6 @@ class DatabaseService {
 
   /// 创建数据库表
   Future<void> _onCreate(sqflite.Database db, int version) async {
-    // 创建日程表（手动创建的日程）
-    await db.execute('''
-      CREATE TABLE schedules (
-        id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
-        description TEXT,
-        date TEXT NOT NULL,
-        start_time TEXT,
-        end_time TEXT,
-        is_completed INTEGER NOT NULL DEFAULT 0,
-        source_template_id TEXT,
-        allow_override INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      )
-    ''');
-
     // 创建日期覆盖表（用户手动设置的工作日/休息日）
     await db.execute('''
       CREATE TABLE day_overrides (
@@ -205,7 +188,6 @@ class DatabaseService {
     ''');
 
     // 创建索引
-    await db.execute('CREATE INDEX idx_schedules_date ON schedules(date)');
     await db.execute('CREATE INDEX idx_day_overrides_date ON day_overrides(date)');
     await db.execute('CREATE INDEX idx_overrides_start_date ON schedule_overrides(start_date)');
     await db.execute('CREATE INDEX idx_overrides_rule ON schedule_overrides(rule_id)');
@@ -242,33 +224,6 @@ class DatabaseService {
     );
     
     return result.isNotEmpty;
-  }
-
-  /// 插入日程
-  Future<void> insertSchedule(Schedule schedule) async {
-    final db = await database;
-    await db.insert('schedules', schedule.toMap());
-  }
-
-  /// 更新日程
-  Future<void> updateSchedule(Schedule schedule) async {
-    final db = await database;
-    await db.update(
-      'schedules',
-      schedule.toMap(),
-      where: 'id = ?',
-      whereArgs: [schedule.id],
-    );
-  }
-
-  /// 删除日程
-  Future<void> deleteSchedule(String id) async {
-    final db = await database;
-    await db.delete(
-      'schedules',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
   }
 
   /// 获取指定日期的日程列表（根据规则动态生成，应用覆盖）
@@ -436,17 +391,6 @@ class DatabaseService {
     });
     
     return schedules;
-  }
-
-  /// 获取所有日程
-  Future<List<Schedule>> getAllSchedules() async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'schedules',
-      orderBy: 'date DESC, start_time ASC',
-    );
-
-    return List.generate(maps.length, (i) => Schedule.fromMap(maps[i]));
   }
 
   // ==================== 日期覆盖相关操作 ====================

@@ -1693,9 +1693,18 @@ class ScheduleScreenState extends State<ScheduleScreen> {
                 value ?? false,
               );
             } else {
-              // 如果是独立日程(非规则生成),直接更新 Schedule 对象
-              final updated = schedule.copyWith(isCompleted: value);
-              await dbService.updateSchedule(updated);
+              // 独立日程(非规则生成) — 创建 complete override
+              final ruleId = schedule.sourceTemplateId ?? (schedule.id.split('_').first);
+              final rule = await dbService.getRuleById(ruleId);
+              if (rule != null) {
+                final override = ScheduleOverride(
+                  startDate: schedule.date,
+                  endDate: schedule.date,
+                  ruleId: rule.id,
+                  type: OverrideType.complete,
+                );
+                await dbService.insertOverride(override);
+              }
             }
 
             await _loadSchedules();

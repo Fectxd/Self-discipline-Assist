@@ -88,9 +88,20 @@ class ScheduleDataService extends ChangeNotifier {
   DateTime _nextDay(DateTime date) =>
       DateTime(date.year, date.month, date.day).add(const Duration(days: 1));
 
-  /// 添加日程（自动刷新）
+  /// 添加日程（自动刷新）— 以 specific_date 规则存储
   Future<void> addSchedule(Schedule schedule) async {
-    await _dbService.insertSchedule(schedule);
+    final rule = ScheduleRule(
+      title: schedule.title,
+      description: schedule.description,
+      time: schedule.startTime != null
+          ? '${schedule.startTime!.hour.toString().padLeft(2, '0')}:${schedule.startTime!.minute.toString().padLeft(2, '0')}'
+          : null,
+      endTime: schedule.endTime != null
+          ? '${schedule.endTime!.hour.toString().padLeft(2, '0')}:${schedule.endTime!.minute.toString().padLeft(2, '0')}'
+          : null,
+      condition: RuleCondition.specificDate(schedule.date),
+    );
+    await _dbService.insertRule(rule);
     if (_shouldRefresh(schedule.date)) {
       await loadDate(_currentDate!);
     }
@@ -98,28 +109,89 @@ class ScheduleDataService extends ChangeNotifier {
 
   /// 更新日程（自动刷新）
   Future<void> updateSchedule(Schedule schedule) async {
-    await _dbService.updateSchedule(schedule);
+    if (schedule.sourceTemplateId != null) {
+      // 规则生成的日程 → 创建 override
+      final override = ScheduleOverride(
+        startDate: schedule.date,
+        endDate: schedule.date,
+        ruleId: schedule.sourceTemplateId,
+        type: OverrideType.complete,
+      );
+      await _dbService.insertOverride(override);
+    } else {
+      // 手动创建的日程 → 查找并更新 specific_date 规则
+      final rules = await _dbService.getAllRules();
+      final targetDate = DateTime(schedule.date.year, schedule.date.month, schedule.date.day);
+      for (final r in rules) {
+        if (r.title == schedule.title &&
+            r.condition.type == ConditionType.specificDate &&
+            r.condition.specificDate != null) {
+          final condDate = DateTime(
+            r.condition.specificDate!.year,
+            r.condition.specificDate!.month,
+            r.condition.specificDate!.day,
+          );
+          if (condDate == targetDate) {
+            final updated = ScheduleRule(
+              id: r.id,
+              title: schedule.title,
+              description: schedule.description,
+              time: schedule.startTime != null
+                  ? '${schedule.startTime!.hour.toString().padLeft(2, '0')}:${schedule.startTime!.minute.toString().padLeft(2, '0')}'
+                  : r.time,
+              endTime: schedule.endTime != null
+                  ? '${schedule.endTime!.hour.toString().padLeft(2, '0')}:${schedule.endTime!.minute.toString().padLeft(2, '0')}'
+                  : r.endTime,
+              condition: r.condition,
+              createdAt: r.createdAt,
+              isEnabled: r.isEnabled,
+            );
+            await _dbService.updateRule(updated);
+            break;
+          }
+        }
+      }
+    }
     if (_shouldRefresh(schedule.date)) {
       await loadDate(_currentDate!);
     }
   }
 
   /// 删除日程（自动刷新）
-  Future<void> deleteSchedule(String id, DateTime date) async {
-    await _dbService.deleteSchedule(id);
-    if (_shouldRefresh(date)) {
+  Future<void> deleteSchedule(Schedule schedule) async {
+    if (schedule.sourceTemplateId != null) {
+      // 规则生成的 → skip override
+      final override = ScheduleOverride(
+        startDate: schedule.date,
+        endDate: schedule.date,
+        ruleId: schedule.sourceTemplateId,
+        type: OverrideType.skip,
+      );
+      await _dbService.insertOverride(override);
+    } else {
+      // 手动创建的 → 查找并删除 specific_date 规则
+      final rules = await _dbService.getAllRules();
+      for (final r in rules) {
+        if (r.title == schedule.title) {
+          await _dbService.deleteRule(r.id);
+          break;
+        }
+      }
+    }
+    if (_shouldRefresh(schedule.date)) {
       await loadDate(_currentDate!);
     }
   }
 
   /// 批量删除日程（自动刷新）
   Future<void> deleteSchedules(List<String> ids, DateTime date) async {
-    final db = await _dbService.database;
-    await db.transaction((txn) async {
-      for (final id in ids) {
-        await txn.delete('schedules', where: 'id = ?', whereArgs: [id]);
+    for (final id in ids) {
+      // 尝试按规则ID删除
+      final rule = await _dbService.getRuleById(id.split('_').first);
+      if (rule != null) {
+        await _dbService.deleteRule(rule.id);
       }
-    });
+    }
     if (_shouldRefresh(date)) {
       await loadDate(_currentDate!);
     }

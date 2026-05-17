@@ -1015,9 +1015,12 @@ class FunctionCallingServiceV2 implements AIService {
       }
     }
 
-    // 2. 手动创建的日程 (存在 schedules 表中)
-    await _dbService.deleteSchedule(id);
-    debugPrint('[_deleteSchedule] 已从 schedules 表删除: $id');
+    // 2. 手动创建的日程 — 直接删规则
+    final rule = await _dbService.getRuleById(ruleId);
+    if (rule != null) {
+      await _dbService.deleteRule(ruleId);
+      debugPrint('[_deleteSchedule] 已删除规则: $ruleId');
+    }
   }
 
   Future<void> _executeDeleteAll() async {
@@ -1033,7 +1036,13 @@ class FunctionCallingServiceV2 implements AIService {
       final schedules = await _dbService.getSchedulesByDate(today.add(Duration(days: i)));
       try {
         final s = schedules.firstWhere((s) => s.id == scheduleId);
-        await _dbService.updateSchedule(s.copyWith(isCompleted: !s.isCompleted));
+        final override = ScheduleOverride(
+          startDate: s.date,
+          endDate: s.date,
+          ruleId: s.sourceTemplateId ?? s.id.split('_').first,
+          type: OverrideType.complete,
+        );
+        await _dbService.insertOverride(override);
         return;
       } catch (_) {}
     }

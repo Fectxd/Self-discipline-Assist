@@ -168,16 +168,35 @@ Future<EditDialogResult?> showScheduleEditDialog(BuildContext rootContext, Sched
                     }
                   }
 
-                  // 修改单个日程实例（非规则来源）
-                  DateTime? newStartTime;
-                  if (selectedTime != null) newStartTime = DateTime(schedule.date.year, schedule.date.month, schedule.date.day, selectedTime!.hour, selectedTime!.minute);
+                  // 修改单个日程实例（非规则来源）— 更新 specific_date 规则
+                  final ruleId = schedule.sourceTemplateId ?? (schedule.id.split('_').first);
+                  final rule = await dbService.getRuleById(ruleId);
+                  if (rule != null) {
+                    DateTime? newStartTime;
+                    if (selectedTime != null) newStartTime = DateTime(schedule.date.year, schedule.date.month, schedule.date.day, selectedTime!.hour, selectedTime!.minute);
 
-                  DateTime? newEndTime;
-                  if (selectedEndTime != null) newEndTime = DateTime(schedule.date.year, schedule.date.month, schedule.date.day, selectedEndTime!.hour, selectedEndTime!.minute);
+                    DateTime? newEndTime;
+                    if (selectedEndTime != null) newEndTime = DateTime(schedule.date.year, schedule.date.month, schedule.date.day, selectedEndTime!.hour, selectedEndTime!.minute);
 
-                  final updated = schedule.copyWith(title: titleController.text.trim(), description: descController.text.trim().isEmpty ? null : descController.text.trim(), startTime: newStartTime, endTime: newEndTime);
+                    final timeStr = newStartTime != null
+                        ? '${newStartTime.hour.toString().padLeft(2, '0')}:${newStartTime.minute.toString().padLeft(2, '0')}'
+                        : rule.time;
+                    final endTimeStr = newEndTime != null
+                        ? '${newEndTime.hour.toString().padLeft(2, '0')}:${newEndTime.minute.toString().padLeft(2, '0')}'
+                        : rule.endTime;
 
-                  await dbService.updateSchedule(updated);
+                    final updatedRule = ScheduleRule(
+                      id: rule.id,
+                      title: titleController.text.trim(),
+                      description: descController.text.trim().isEmpty ? null : descController.text.trim(),
+                      time: timeStr,
+                      endTime: endTimeStr,
+                      condition: rule.condition,
+                      createdAt: rule.createdAt,
+                      isEnabled: rule.isEnabled,
+                    );
+                    await dbService.updateRule(updatedRule);
+                  }
                   if (dialogNavigator.mounted) dialogNavigator.pop(EditDialogResult(changed: true, message: '日程已更新'));
                 },
                 child: const Text('保存'),

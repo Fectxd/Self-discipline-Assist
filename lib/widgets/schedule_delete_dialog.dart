@@ -84,7 +84,12 @@ Future<bool?> showScheduleDeleteDialog(BuildContext rootContext, Schedule schedu
                     await dbService.insertOverride(override);
                   }
                 } else {
-                  await dbService.deleteSchedule(schedule.id);
+                  // 独立日程 — 找到并删除 specific_date 规则
+                  final ruleId = schedule.sourceTemplateId ?? (schedule.id.split('_').first);
+                  final rule = await dbService.getRuleById(ruleId);
+                  if (rule != null) {
+                    await dbService.deleteRule(rule.id);
+                  }
                 }
 
                 if (navigator.mounted) navigator.pop(true);
