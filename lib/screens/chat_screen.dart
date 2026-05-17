@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/gpt_service.dart';
+import '../services/function_calling_service_v2.dart';
 import '../services/api_config_service.dart';
 import '../services/database_service.dart';
 import '../services/day_service.dart';
@@ -20,7 +20,7 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  late GptService _gptService;
+  late FunctionCallingServiceV2 _aiService;
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
@@ -36,7 +36,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final workScheduleService = context.read<WorkScheduleService>();
     final msnService = context.read<MsnService>();
 
-    _gptService = GptService(
+    _aiService = FunctionCallingServiceV2(
       apiConfigService,
       dbService,
       dayService,
@@ -68,23 +68,60 @@ class _ChatScreenState extends State<ChatScreen> {
     final userMessage = text.trim();
     _textController.clear();
 
-    setState(() {
-      _messages.add(
-        ChatMessage(text: userMessage, isUser: true, timestamp: DateTime.now()),
-      );
-      _isLoading = true;
-    });
-
+    // 添加用户消息
+    final userMsg = ChatMessage(
+      text: userMessage, isUser: true, timestamp: DateTime.now(),
+    );
+    setState(() => _messages.add(userMsg));
     _scrollToBottom();
 
+    // 创建占位回复（流式填充）
+    final placeholder = ChatMessage(
+      text: '', isUser: false, timestamp: DateTime.now(),
+    );
+    setState(() => _messages.add(placeholder));
+
+    _isLoading = true;
+
     try {
-      final response = await _gptService.chat(userMessage);
+      final buffer = StringBuffer();
+      var hasToolCall = false;
+
+      final response = await _aiService.chatStream(
+        userMessage,
+        onChunk: (chunk) {
+          buffer.write(chunk);
+          if (!mounted) return;
+          setState(() {
+            _messages[_messages.length - 1] = ChatMessage(
+              text: buffer.toString(),
+              isUser: false,
+              timestamp: DateTime.now(),
+            );
+          });
+          _scrollToBottom();
+        },
+        onToolDetected: () {
+          hasToolCall = true;
+          if (!mounted) return;
+          setState(() {
+            _messages[_messages.length - 1] = ChatMessage(
+              text: '🔧 正在处理工具调用...',
+              isUser: false,
+              timestamp: DateTime.now(),
+            );
+          });
+        },
+      );
 
       if (!mounted) return;
 
+      // 替换占位为最终回复
       setState(() {
-        _messages.add(
-          ChatMessage(text: response, isUser: false, timestamp: DateTime.now()),
+        _messages[_messages.length - 1] = ChatMessage(
+          text: response,
+          isUser: false,
+          timestamp: DateTime.now(),
         );
         _isLoading = false;
       });
@@ -93,13 +130,11 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _messages.add(
-          ChatMessage(
-            text: '抱歉，处理你的请求时出错了：$e',
-            isUser: false,
-            timestamp: DateTime.now(),
-            isError: true,
-          ),
+        _messages[_messages.length - 1] = ChatMessage(
+          text: '抱歉，处理你的请求时出错了：$e',
+          isUser: false,
+          timestamp: DateTime.now(),
+          isError: true,
         );
         _isLoading = false;
       });
@@ -129,7 +164,7 @@ class _ChatScreenState extends State<ChatScreen> {
     });
 
     try {
-      await _gptService.executeAction(action.id);
+      await _aiService.executeAction(action.id);
       if (!mounted) return;
       setState(() {
         _processingActions.remove(action.id);
@@ -176,7 +211,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _processingActions.add(action.id);
     });
 
-    _gptService.rejectAction(action.id);
+    _aiService.rejectAction(action.id);
     setState(() {
       _processingActions.remove(action.id);
       _messages.add(
@@ -205,7 +240,7 @@ class _ChatScreenState extends State<ChatScreen> {
             onPressed: () {
               setState(() {
                 _messages.clear();
-                _gptService.clearHistory(); // 已经包含了清空 pendingActions 和中断对话
+                _aiService.clearHistory(); // 已经包含了清空 pendingActions 和中断对话
                 _messages.add(
                   ChatMessage(
                     text: '✅ 对话已完全重置！\n\n所有上下文已清空，这是一个全新的对话。\n\n有什么可以帮你的吗？',
@@ -239,16 +274,16 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Column(
         children: [
           // 待审批操作卡片区域
-          if (_gptService.pendingActions.isNotEmpty)
+          if (_aiService.pendingActions.isNotEmpty)
             Flexible(
               flex: 0,
               child: Container(
                 constraints: const BoxConstraints(maxHeight: 200),
                 child: ListView.builder(
                   padding: const EdgeInsets.all(8),
-                  itemCount: _gptService.pendingActions.length,
+                  itemCount: _aiService.pendingActions.length,
                   itemBuilder: (context, index) {
-                    final action = _gptService.pendingActions[index];
+                    final action = _aiService.pendingActions[index];
                     return KeyedSubtree(
                       key: ValueKey(action.id),
                       child: _buildApprovalCard(action),

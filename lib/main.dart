@@ -7,8 +7,7 @@ import 'services/holiday_service.dart';
 import 'services/day_service.dart';
 import 'services/work_schedule_service.dart';
 import 'services/api_config_service.dart';
-import 'services/gpt_service.dart';
-import 'services/gemini_service.dart';
+import 'services/function_calling_service_v2.dart';
 import 'services/ai_service.dart';
 import 'services/msn_service.dart';
 import 'services/dashboard_widget_service.dart';
@@ -108,7 +107,7 @@ void main() async {
           Provider.value(value: importExportService),
           // 记忆服务
           ChangeNotifierProvider.value(value: memoryService),
-          // AI 服务 (依赖 ApiConfigService, DatabaseService, DayService, WorkScheduleService, MsnService)
+          // AI Function Calling 服务
           ProxyProvider5<
             ApiConfigService,
             DatabaseService,
@@ -117,13 +116,8 @@ void main() async {
             MsnService,
             AIService
           >(
-            update: (context, config, db, day, work, msn, previous) {
-              // 如果配置发生变化，重新创建服务
-              if (config.isGemini) {
-                return GeminiService(config, db, day, work, msn);
-              } else {
-                return GptService(config, db, day, work, msn);
-              }
+            update: (_, config, db, day, work, msn, previous) {
+              return previous ?? FunctionCallingServiceV2(config, db, day, work, msn);
             },
           ),
         ],

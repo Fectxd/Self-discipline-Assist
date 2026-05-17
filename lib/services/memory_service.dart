@@ -223,6 +223,63 @@ class MemoryService extends ChangeNotifier {
     return _parseMemories(maps);
   }
 
+  /// 多关键词搜索记忆（上下文感知）
+  ///
+  /// 从用户消息中提取关键词，分别搜索后合并去重
+  /// 优先返回与最多关键词匹配的记忆
+  Future<List<MemoryEntry>> searchByKeywords(String query, {int maxResults = 3}) async {
+    final keywords = _extractKeywords(query);
+    if (keywords.isEmpty) return [];
+
+    final scored = <String, Map<String, dynamic>>{}; // memoryId -> {entry, score}
+
+    for (final kw in keywords) {
+      final results = await searchMemories(kw);
+      for (final entry in results) {
+        if (scored.containsKey(entry.id)) {
+          scored[entry.id]!['score'] = (scored[entry.id]!['score'] as int) + 1;
+        } else {
+          scored[entry.id] = {
+            'entry': entry,
+            'score': 1,
+          };
+        }
+      }
+    }
+
+    // 按匹配关键词数排序，最多 maxResults 条
+    final sorted = scored.values.toList()
+      ..sort((a, b) => (b['score'] as int).compareTo(a['score'] as int));
+
+    return sorted
+        .take(maxResults)
+        .map((s) => s['entry'] as MemoryEntry)
+        .toList();
+  }
+
+  /// 从文本中提取搜索关键词
+  /// 排除停用词和无意义词汇
+  List<String> _extractKeywords(String text) {
+    final stopWords = {
+      '的', '了', '是', '在', '有', '我', '你', '他', '她', '它',
+      '这', '那', '和', '与', '也', '都', '就', '还', '要', '把',
+      '被', '让', '给', '为', '从', '对', '到', '去', '来', '说',
+      '吗', '吧', '呢', '啊', '哦', '嗯', '哈',
+      '什么', '怎么', '为什么', '如何', '哪个',
+      '可以', '能', '会', '应该', '可能',
+    };
+
+    // 先去掉标点
+    final cleaned = text.replaceAll(RegExp(r'[，。！？、；："\'\[\]\(\)【】「」『』《》—…·～]'), '');
+
+    // 按空格/逗号分割，过滤停用词和短词
+    final tokens = cleaned.split(RegExp(r'[\s,，、]+'))
+      ..removeWhere((t) => t.length < 2 || stopWords.contains(t));
+
+    // 去重
+    return tokens.toSet().toList();
+  }
+
   /// 清理低重要性且少使用的记忆（定期清理）
   Future<void> cleanupOldMemories({
     double minImportance = 0.3,
