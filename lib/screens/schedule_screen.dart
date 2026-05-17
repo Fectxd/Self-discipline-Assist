@@ -488,11 +488,20 @@ class ScheduleScreenState extends State<ScheduleScreen> {
         if (hasCurrentSchedule) {
           final ctx = _scheduleItemKeys[currentIndex].currentContext;
           if (ctx != null) {
-            Scrollable.ensureVisible(
-              ctx,
-              duration: const Duration(milliseconds: 300),
-              alignment: 0.0,
-            );
+            final RenderBox? box = ctx.findRenderObject() as RenderBox?;
+            if (box != null) {
+              final viewport = RenderAbstractViewport.of(box);
+              final double target = viewport
+                  .getOffsetToReveal(box, 0.0)
+                  .offset - 15; // 距顶部 15px 间距
+              _scheduleScrollController.jumpTo(target.clamp(0.0, _scheduleScrollController.position.maxScrollExtent));
+            } else {
+              Scrollable.ensureVisible(
+                ctx,
+                duration: const Duration(milliseconds: 300),
+                alignment: 0.0,
+              );
+            }
           } else {
             _scheduleScrollController.jumpTo(0);
           }
@@ -552,9 +561,11 @@ class ScheduleScreenState extends State<ScheduleScreen> {
             final RenderAbstractViewport viewport = RenderAbstractViewport.of(
               box,
             );
-            final double targetOffset = viewport
-                .getOffsetToReveal(box, 0.2)
+            // 对齐到顶部 + 15px 间距，避免贴边
+            final double revealOffset = viewport
+                .getOffsetToReveal(box, 0.0)
                 .offset;
+            final double targetOffset = revealOffset - 15;
 
             // 获取最大滚动范围
             final maxScrollExtent =
@@ -717,6 +728,16 @@ class ScheduleScreenState extends State<ScheduleScreen> {
 
       _shouldScrollToCurrent = false; // 审批操作刷新不触发滚动
       await _loadSchedules(); // 刷新日程列表
+      // 重置滚动位置到有效范围，避免日程数量变化后无法滑动
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scheduleScrollController.hasClients &&
+            _scheduleScrollController.offset >
+                _scheduleScrollController.position.maxScrollExtent) {
+          _scheduleScrollController.jumpTo(
+            _scheduleScrollController.position.maxScrollExtent,
+          );
+        }
+      });
       setState(() {}); // 触发重建以更新审批列表
 
       debugPrint('日程列表已刷新，当前日程数量: ${_schedules.length}');
